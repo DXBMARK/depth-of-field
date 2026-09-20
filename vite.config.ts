@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: "/depth-of-field/",
+  // Vercel serves the app from the domain root; only GitHub Pages needs the subpath.
+  base: process.env.VERCEL ? "/" : "/depth-of-field/",
   plugins: [react()],
 });
