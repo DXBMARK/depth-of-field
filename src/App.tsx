@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
-import { FiCamera, FiGithub, FiMoon, FiSun, FiTarget, FiZoomIn } from "react-icons/fi";
-import { TbAperture, TbRuler, TbUser } from "react-icons/tb";
+import { Slider as SliderPrimitive } from "@base-ui/react/slider";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faBullseye,
+  faCamera,
+  faMagnifyingGlass,
+  faMoon,
+  faRulerCombined,
+  faSun,
+  faUser,
+} from "@fortawesome/free-solid-svg-icons";
+import { FiGithub } from "react-icons/fi";
 import PhotographyGraphic, { SUBJECTS } from "./PhotographyGraphic";
 import Fisheye from "./assets/fishey.png";
 import Telephoto from "./assets/100-400.png";
@@ -28,22 +38,25 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 
 type SliderProps = {
   id: string; label: string; valueLabel: string; value: number; min: number; max: number; step: number;
-  update: (value: number) => void; marks: string[]; dark: boolean; icon: typeof TbRuler;
+  update: (value: number) => void; marks: string[]; icon: typeof faRulerCombined; lesson: string;
 };
 
-function Slider({ id, label, valueLabel, value, min, max, step, update, marks, dark, icon: Icon }: SliderProps) {
-  const active = dark ? "#60a5fa" : "#2563eb";
-  const inactive = dark ? "#334155" : "#dbe3ee";
-  const progress = ((value - min) / (max - min)) * 100;
+function Slider({ id, label, valueLabel, value, min, max, step, update, marks, icon: Icon, lesson }: SliderProps) {
   return <section className="border-b border-slate-200 py-6 last:border-0 dark:border-slate-700">
     <div className="mb-4 flex items-center justify-between gap-3">
-      <label htmlFor={id} className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100"><Icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />{label}</label>
+      <span id={`${id}-label`} className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100"><FontAwesomeIcon icon={Icon} className="h-4 w-4 text-blue-600 dark:text-blue-400" />{label}</span>
       <output className="rounded-md bg-blue-50 px-2.5 py-1 font-mono text-sm font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">{valueLabel}</output>
     </div>
-    <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(event) => update(Number(event.target.value))}
-      style={{ background: `linear-gradient(to right, ${active} 0%, ${active} ${progress}%, ${inactive} ${progress}%, ${inactive} 100%)` }}
-      className="h-11 w-full cursor-pointer appearance-none rounded-full bg-clip-content py-[18px] accent-blue-600 outline-none focus-visible:ring-4 focus-visible:ring-blue-500/30" />
+    <SliderPrimitive.Root value={value} min={min} max={max} step={step} largeStep={Math.max(step * 10, 1)} thumbAlignment="edge" onValueChange={update} aria-labelledby={`${id}-label`} className="relative flex h-11 w-full touch-none select-none items-center">
+      <SliderPrimitive.Control className="relative h-full w-full cursor-pointer touch-none">
+        <SliderPrimitive.Track className="absolute top-1/2 h-2 w-full -translate-y-1/2 rounded-full bg-slate-200 dark:bg-slate-700">
+          <SliderPrimitive.Indicator className="h-full rounded-full bg-blue-600 dark:bg-blue-400" />
+        </SliderPrimitive.Track>
+        <SliderPrimitive.Thumb aria-label={label} className="block h-5 w-5 rounded-full border-4 border-white bg-blue-600 shadow-md outline-none transition focus-visible:ring-4 focus-visible:ring-blue-500/30 dark:border-slate-900 dark:bg-blue-400" />
+      </SliderPrimitive.Control>
+    </SliderPrimitive.Root>
     <div className="mt-3 hidden justify-between text-[11px] font-medium text-slate-400 sm:flex">{marks.map((mark) => <span key={mark}>{mark}</span>)}</div>
+    <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{lesson}</p>
   </section>;
 }
 
@@ -90,24 +103,24 @@ function App() {
     <div className="mx-auto max-w-[1440px] px-4 py-5 lg:px-8 lg:py-8">
       <header className="mb-6 flex items-center justify-between border-b border-slate-200 pb-5 dark:border-slate-800">
         <div><p className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">Optical planning tool</p><h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white">Depth of Field Simulator</h1></div>
-        <button type="button" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"} title={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setDark(!dark)} className="grid h-11 w-11 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">{dark ? <FiSun className="h-5 w-5" /> : <FiMoon className="h-5 w-5" />}</button>
+        <button type="button" aria-label={dark ? "Switch to light mode" : "Switch to dark mode"} title={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={() => setDark(!dark)} className="grid h-11 w-11 place-items-center rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-blue-300 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><FontAwesomeIcon icon={dark ? faSun : faMoon} className="h-5 w-5" /></button>
       </header>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
         <section className="min-w-0 animate-in fade-in slide-in-from-bottom-2 duration-500 motion-reduce:animate-none">
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white p-2 shadow-panel dark:border-slate-800 dark:bg-slate-900"><PhotographyGraphic distanceToSubjectInInches={distance} nearFocalPointInInches={near} farFocalPointInInches={far} farDistanceInInches={farSceneInches} subject={subject as keyof typeof SUBJECTS} focalLength={focalLength} aperture={aperture} system={system} verticalFieldOfView={fov} textColor={dark ? "#f8fafc" : "#172033"} onChangeDistance={setDistance} /></div>
           <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{metricCards.map(([label, value]) => <div key={label} className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><p className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">{label}</p><p className="mt-2 truncate font-mono text-xl font-bold text-slate-950 dark:text-white">{value}</p></div>)}</div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50/70 px-4 py-3 dark:border-blue-500/20 dark:bg-blue-500/10"><span className="inline-flex items-center gap-2 text-sm font-semibold text-blue-800 dark:text-blue-200"><FiTarget />{fieldType}</span><button type="button" disabled={hyperfocal > farSceneInches} onClick={() => setDistance(Math.round(hyperfocal))} className="min-h-11 rounded-md border border-blue-200 bg-white px-3 text-sm font-bold text-blue-700 transition hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-400/30 dark:bg-slate-900 dark:text-blue-300">Set hyperfocal</button></div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50/70 px-4 py-3 dark:border-blue-500/20 dark:bg-blue-500/10"><span className="inline-flex items-center gap-2 text-sm font-semibold text-blue-800 dark:text-blue-200"><FontAwesomeIcon icon={faBullseye} />{fieldType}</span><button type="button" disabled={hyperfocal > farSceneInches} onClick={() => setDistance(Math.round(hyperfocal))} className="min-h-11 rounded-md border border-blue-200 bg-white px-3 text-sm font-bold text-blue-700 transition hover:border-blue-400 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-400/30 dark:bg-slate-900 dark:text-blue-300">Set hyperfocal</button></div>
         </section>
         <aside className="animate-in fade-in slide-in-from-bottom-2 duration-500 motion-reduce:animate-none rounded-lg border border-slate-200 bg-white px-5 shadow-panel dark:border-slate-800 dark:bg-slate-900 lg:px-6">
           <div className="border-b border-slate-200 py-5 dark:border-slate-700"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Capture controls</p><div className="mt-4 grid grid-cols-2 rounded-md bg-slate-100 p-1 dark:bg-slate-800">{(["Metric", "Imperial"] as const).map((item) => <button key={item} type="button" aria-pressed={system === item} onClick={() => setSystem(item)} className={`min-h-11 rounded px-3 text-sm font-bold transition ${system === item ? "bg-white text-blue-700 shadow-sm dark:bg-slate-700 dark:text-blue-300" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"}`}>{item}</button>)}</div></div>
-          <Slider id="subject-distance" label={`Distance (${system === "Imperial" ? "ft" : "m"})`} valueLabel={convert(distance, 1)} value={distance} min={10} max={400} step={1} update={setDistance} icon={TbRuler} marks={distanceMarks} dark={dark} />
-          <Slider id="focal-length" label="Focal length" valueLabel={`${focalLength}mm`} value={focalLength} min={3} max={400} step={1} update={setFocalLength} icon={FiZoomIn} marks={["14mm", "28mm", "50mm", "85mm", "135mm", "200mm"]} dark={dark} />
+          <Slider id="subject-distance" label="Distance to subject" valueLabel={convert(distance, 1)} value={distance} min={10} max={400} step={1} update={setDistance} icon={faRulerCombined} marks={distanceMarks} lesson="Moving closer narrows depth of field; stepping back makes more of the scene appear sharp." />
+          <Slider id="focal-length" label="Focal length" valueLabel={`${focalLength}mm`} value={focalLength} min={3} max={400} step={1} update={setFocalLength} icon={faMagnifyingGlass} marks={["14mm", "28mm", "50mm", "85mm", "135mm", "200mm"]} lesson="Longer lenses compress the scene and make the focused zone shallower at the same distance." />
           <div className="-mt-2 flex items-center justify-between pb-2 text-xs text-slate-500 dark:text-slate-400"><img src={Fisheye} alt="Fisheye lens" className="h-8 w-auto object-contain" />{sensor !== "35mm (full frame)" && <span>{equivalent}mm full-frame equivalent</span>}<img src={Telephoto} alt="Telephoto lens" className="h-8 w-auto object-contain" /></div>
-          <Slider id="aperture" label="Aperture" valueLabel={`f/${aperture.toFixed(1)}`} value={aperture} min={0.8} max={22} step={0.1} update={setAperture} icon={TbAperture} marks={["f/0.8", "f/1.4", "f/2.8", "f/5.6", "f/11", "f/22"]} dark={dark} />
+          <Slider id="aperture" label="Aperture" valueLabel={`f/${aperture.toFixed(1)}`} value={aperture} min={0.8} max={22} step={0.1} update={setAperture} icon={faCamera} marks={["f/0.8", "f/1.4", "f/2.8", "f/5.6", "f/11", "f/22"]} lesson="A smaller f-number opens the aperture and isolates the subject; a larger f-number increases sharpness through the scene." />
           {aperture > diffractionLimit && <p className="-mt-3 mb-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-200">Diffraction may reduce sharpness above f/{diffractionLimit.toFixed(1)} on this sensor.</p>}
           <section className="grid gap-4 border-b border-slate-200 py-6 sm:grid-cols-2 dark:border-slate-700">
-            <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100"><span className="mb-2 flex items-center gap-2"><FiCamera className="text-blue-600 dark:text-blue-400" />Sensor</span><select value={sensor} onChange={(event) => setSensor(event.target.value)} className={selectClass}>{Object.keys(CIRCLES).map((name) => <option key={name}>{name}</option>)}<option>Custom</option></select></label>
-            <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100"><span className="mb-2 flex items-center gap-2"><TbUser className="text-blue-600 dark:text-blue-400" />Subject</span><select value={subject} onChange={(event) => setSubject(event.target.value)} className={selectClass}>{Object.keys(SUBJECTS).map((name) => <option key={name}>{name}</option>)}</select></label>
+            <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100"><span className="mb-2 flex items-center gap-2"><FontAwesomeIcon icon={faCamera} className="text-blue-600 dark:text-blue-400" />Sensor</span><select value={sensor} onChange={(event) => setSensor(event.target.value)} className={selectClass}>{Object.keys(CIRCLES).map((name) => <option key={name}>{name}</option>)}<option>Custom</option></select></label>
+            <label className="block text-sm font-semibold text-slate-800 dark:text-slate-100"><span className="mb-2 flex items-center gap-2"><FontAwesomeIcon icon={faUser} className="text-blue-600 dark:text-blue-400" />Subject</span><select value={subject} onChange={(event) => setSubject(event.target.value)} className={selectClass}>{Object.keys(SUBJECTS).map((name) => <option key={name}>{name}</option>)}</select></label>
             {custom && <div className="col-span-full grid grid-cols-2 gap-3 rounded-md bg-slate-50 p-3 dark:bg-slate-800/60"><label className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Width (mm)<input aria-label="Custom sensor width" type="number" min="1" value={customWidth} onChange={(event) => setCustomWidth(Math.max(1, Number(event.target.value)))} className="mt-1.5 h-10 w-full rounded border border-slate-300 bg-white px-2 text-sm font-medium text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white" /></label><label className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Height (mm)<input aria-label="Custom sensor height" type="number" min="1" value={customHeight} onChange={(event) => setCustomHeight(Math.max(1, Number(event.target.value)))} className="mt-1.5 h-10 w-full rounded border border-slate-300 bg-white px-2 text-sm font-medium text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white" /></label></div>}
           </section>
           <section className="py-6"><p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Quick presets</p><div className="flex flex-wrap gap-2">{PRESETS.map(([name, focal, fStop, targetDistance, presetSensor]) => <button key={name} type="button" onClick={() => { setFocalLength(focal); setAperture(fStop); setSensor(presetSensor); setDistance(targetDistance); }} className="min-h-11 rounded-md border border-slate-200 px-2.5 text-xs font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/30 dark:border-slate-700 dark:text-slate-200 dark:hover:border-blue-500 dark:hover:bg-slate-800 dark:hover:text-blue-300">{name}</button>)}</div></section>
