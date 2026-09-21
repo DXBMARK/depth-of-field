@@ -4,17 +4,66 @@
 
 @layer base {
   :root {
-    font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-    color: #172033;
-    background: #f4f7fb;
+    font-family: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+    color: rgb(var(--ink));
+    background: rgb(var(--canvas));
     font-synthesis: none;
     text-rendering: optimizeLegibility;
+
+    --canvas: 247 250 254;
+    --surface: 255 255 255;
+    --surface-soft: 248 251 255;
+
+    --ink: 11 23 54;
+    --text-secondary: 91 111 143;
+    --text-muted: 126 144 168;
+
+    --line: 220 229 240;
+    --line-strong: 207 219 233;
+
+    --primary: 20 110 245;
+    --primary-hover: 10 91 219;
+    --primary-soft: 239 246 255;
+
+    --focus-red: 230 94 101;
+    --focus-soft: 252 233 234;
+  }
+
+  .dark {
+    --canvas: 10 17 31;
+    --surface: 17 26 45;
+    --surface-soft: 22 32 53;
+
+    --ink: 245 247 251;
+    --text-secondary: 166 181 204;
+    --text-muted: 126 143 169;
+
+    --line: 38 52 74;
+    --line-strong: 52 69 95;
+
+    --primary: 79 142 255;
+    --primary-hover: 105 160 255;
+    --primary-soft: 25 47 82;
+
+    --focus-red: 242 122 129;
+    --focus-soft: 70 38 45;
+  }
+
+  html,
+  body,
+  #root {
+    min-width: 320px;
+    min-height: 100%;
   }
 
   body {
-    min-width: 320px;
-    min-height: 100vh;
     margin: 0;
+    background: rgb(var(--canvas));
+    color: rgb(var(--ink));
+    font-family: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 
   button,
@@ -23,8 +72,8 @@
     font: inherit;
   }
 
-  svg text {
-    fill: currentColor;
+  * {
+    box-sizing: border-box;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -36,5 +85,17 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+  }
+}
+
+@layer components {
+  .dof-scene-frame {
+    height: clamp(340px, 35vh, 382px);
+  }
+}
+
+@media (min-width: 1280px) and (max-height: 900px) {
+  .dof-scene-frame {
+    height: 310px;
   }
 }

@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useId, useRef } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { toImperial, toMetric } from "./utils/units";
 
 const SmallDog = () => (
@@ -67,295 +68,362 @@ export const SUBJECTS = {
   },
 };
 
-function findXAtY(
-  x: number,
-  y: number,
-  angle: number,
-  targetY: number
-): number {
-  const angleRadians = angle * (Math.PI / 180);
-  const slope = Math.tan(angleRadians);
-  return ((targetY - y) / slope + x) * -1;
-}
 
-function findYAtX(
-  x: number,
-  _y: number,
-  angle: number,
-  targetX: number
-): number {
-  const angleRadians = angle * (Math.PI / 180);
-  const slope = Math.tan(angleRadians);
-  return slope * (targetX - x);
-}
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
 
-function buildViewPath(
-  x: number,
-  y: number,
-  verticalFieldOfView: number,
-  farDistanceInInches: number,
-  height: number
-) {
-  let path = `M${x},${y - 1}`;
+const VIEW_W = 1000;
+const VIEW_H = 470;
+const SCENE_TOP = 82;
+const GROUND_Y = 334;
+const LENS_X = 145;
+const LENS_Y = 188;
+const SCENE_RIGHT = 955;
+const AXIS_LEFT = 52;
+const AXIS_Y = 365;
+const BRACKET_Y = 420;
 
-  const topRayIntercept = findXAtY(x, y, verticalFieldOfView / 2, 0);
-  if (topRayIntercept < farDistanceInInches) {
-    path += ` L${topRayIntercept},0 L${farDistanceInInches},0`;
-  } else {
-    const topRayInterceptY = findYAtX(
-      x,
-      y,
-      verticalFieldOfView / 2,
-      farDistanceInInches
-    );
-    path += ` L${farDistanceInInches},${y - topRayInterceptY}`;
-  }
-  path += ` L${farDistanceInInches},${y}`;
+const PhotographerGraphic = () => (
+  <path
+    d="M43.5,10.57c-.06.05-.14.06-.21.06-.56.02-1.11.02-1.67.05-.23.01-.36-.05-.39-.28-.02-.15-.09-.22-.2-.05-.1.14-.26.1-.4.1-.29.01-.36-.06-.37.34,0,.47-.33.68-.76.5-.19-.08-.29-.08-.37.14-.1.28-.32.46-.59.6-.54.28-1.13.34-1.72.45-.25.05-.51.08-.75.14-.4.09-.58.31-.59.72-.03,1.02-.14,2.04-.27,3.06-.02.15,0,.28.11.39.19.2.21.43.13.68-.42,1.3-1.01,2.51-1.85,3.59-.46.6-1.05,1.01-1.84,1.06-.1,0-.2,0-.29,0-.31-.03-.31-.04-.38.28-.18.82-.5,1.04-1.33.88-.45-.09-.86-.26-1.27-.45-.75-.35-1.47-.76-2.17-1.2-.3-.19-.3-.19-.45.12-.45.9-.88,1.8-1.35,2.68-.28.54-.48,1.1-.59,1.7-.13.7-.22,1.41-.24,2.13-.02,1.36.33,2.63.87,3.87.71,1.62,1.58,3.15,2.47,4.66.11.19.25.38.34.58.54,1.13,1.42,2.02,2.1,3.05,1.15,1.73,2.28,3.47,3.25,5.31.43.81.57,1.68.66,2.56.14,1.5-.07,2.99-.24,4.47-.2,1.69-.5,3.38-.61,5.08-.05.75,0,1.49.11,2.23.14.91.05,1.81,0,2.72-.06,1.1-.25,2.2.07,3.3.05.18.12.34.24.47.53.57,1.07,1.13,1.84,1.38.43.14.87.19,1.31.2.41.01.83.02,1.24.09.76.14,1,.83.51,1.42-.21.25-.49.4-.79.5-.52.18-1.05.25-1.6.26-1,.03-2-.08-3-.09-.32,0-.65-.01-.97,0-.41.03-.77-.08-1.12-.27-.22-.12-.45-.25-.66-.39-.13-.08-.19-.09-.17.09.02.18-.04.26-.24.25-1.15-.11-2.29-.21-3.42-.44-.15-.03-.23-.09-.23-.25-.04-.85-.11-1.7.02-2.55.08-.49.24-.95.52-1.36.08-.12.12-.25.13-.4.06-1.68.12-3.37.18-5.05.06-1.6.12-3.2.18-4.8.06-1.69.12-3.38.19-5.08.02-.44.03-.87.05-1.31,0-.1-.02-.17-.1-.23-1.31-1.11-2.62-2.21-3.93-3.32-.03-.02-.05-.06-.12-.04-.06.48-.12.97-.18,1.46-.17,1.41-.35,2.82-.52,4.23-.11.93-.23,1.85-.33,2.78-.03.25-.11.44-.31.62-2.24,1.97-4.46,3.95-6.69,5.93-1.93,1.71-3.85,3.42-5.78,5.12-.2.17-.33.36-.37.62-.05.3-.13.59-.2.88-.03.12-.03.26-.2.29-.09.01-.05.08-.01.12.91,1.13,1.91,2.09,3.49,2.13.59.01,1.19.01,1.77.18.57.16.81.68.57,1.23-.14.33-.4.54-.71.7-.56.27-1.16.37-1.77.4-1.08.05-2.16-.05-3.25-.12-.47-.03-.95-.04-1.42-.01-.49.03-.92-.11-1.33-.35-.24-.14-.48-.29-.71-.44-.12-.07-.15-.05-.16.09-.01.3-.02.31-.33.29-1.22-.11-2.44-.26-3.64-.5-.21-.04-.3-.14-.3-.36-.03-.72-.05-1.44,0-2.17.07-1.34.69-2.38,1.75-3.17.21-.15.34-.28.19-.54-.07-.13.02-.21.1-.29.99-1.06,1.98-2.13,2.97-3.19,2.09-2.23,4.17-4.47,6.33-6.63.91-.92,1.85-1.81,2.82-2.67.66-.58.88-1.29.8-2.12-.29-3.12-.9-6.18-1.75-9.18-.34-1.2-.79-2.37-1.2-3.55-.16-.46-.28-.94-.38-1.41-.05-.26-.05-.26-.31-.16-.18.07-.36.14-.54.22-.15.07-.22.03-.23-.14,0-.26-.03-.51-.04-.77-.05-1.28-.1-2.56-.16-3.83,0-.13.01-.25.05-.38.38-1.16.74-2.32,1.13-3.48.14-.41.36-.8.55-1.19.45-.93.89-1.88,1.24-2.86.18-.51.25-1.04.31-1.57.18-1.5.62-2.93,1.11-4.34.82-2.38,1.74-4.73,2.85-7,.45-.92.93-1.83,1.6-2.61.52-.61,1.15-1.04,1.98-1.09.04,0,.08-.02.11,0,.35.11.51-.09.68-.35.17-.28.42-.49.65-.72.12-.11.21-.13.35-.02.47.36.94.7,1.41,1.05.21.16.21.16.31-.09.28-.71.4-1.46.58-2.2.23-.93.61-1.77,1.39-2.36.91-.7,1.95-1.09,3.09-1.24.95-.12,1.77.15,2.49.76.67.57,1.38,1.07,2.15,1.48.16.09.31.19.45.31.44.37.46.84.05,1.25-.23.24-.53.37-.84.48-.17.06-.23.14-.23.33,0,.48.07.94.15,1.41.04.26.21.22.38.22.17,0,.26-.04.28-.23.03-.34.04-.34.38-.35.53,0,1.05,0,1.58-.02.21,0,.28.07.27.27-.01.28,0,.56,0,.84-.01.21.07.27.27.27,1-.01,2,0,3-.02.28,0,.55-.03.65.34.1-.08.13-.17.15-.25.06-.25.22-.32.46-.31.58.03,1.16.03,1.74.05v3.34ZM33.26,9.74c-.21.19-.32.38-.44.57-.31.51-.53,1.06-.76,1.61-.07.16-.15.3-.35.29-.99-.04-1.87-.28-2.31-1.3-.05-.13-.12-.15-.24-.09-.25.13-.51.27-.77.39-.15.07-.15.15-.07.28.31.5.62,1,.92,1.5.08.13.16.16.29.1.28-.14.56-.08.82.08.13.08.25.16.38.24.34.22.56.21.85-.07.27-.25.51-.53.76-.8.21-.23.45-.44.59-.71.32-.64.36-1.34.32-2.09ZM32.35,13.46c-.55.37-1.11.7-1.67,1.03-.1.06-.08.13,0,.2.21.21.42.43.63.64.09.09.14.1.23,0,.48-.53.6-1.21.81-1.87Z"
+  />
+);
 
-  const bottomRayIntercept = findXAtY(x, y, -verticalFieldOfView / 2, height);
-  if (bottomRayIntercept < farDistanceInInches) {
-    path += ` L${farDistanceInInches},${height} L${bottomRayIntercept},${height}`;
-  } else {
-    const bottomRayInterceptY = findYAtX(
-      x,
-      y,
-      -(verticalFieldOfView / 2),
-      farDistanceInInches
-    );
-    path += ` L${farDistanceInInches},${y + -bottomRayInterceptY}`;
+function spreadFocusLabels(nearAnchor: number, centreAnchor: number, farAnchor: number) {
+  const minGap = 88;
+  const minX = 455;
+  const maxX = 885;
+
+  let near = nearAnchor;
+  let centre = centreAnchor;
+  let far = farAnchor;
+
+  if (centre - near < minGap) near = centre - minGap;
+  if (far - centre < minGap) far = centre + minGap;
+
+  if (near < minX) {
+    const shift = minX - near;
+    near += shift;
+    centre += shift;
+    far += shift;
   }
 
-  path += ` L${x},${y + 1} Z`;
+  if (far > maxX) {
+    const shift = far - maxX;
+    near -= shift;
+    centre -= shift;
+    far -= shift;
+  }
 
-  return path;
+  return { near, centre, far };
+}
+
+function formatAxisValue(system: string, inches: number, precision = 0) {
+  return system === "Imperial" ? toImperial(inches, precision) : toMetric(inches, precision);
 }
 
 export default function PhotographyGraphic({
   distanceToSubjectInInches,
   nearFocalPointInInches,
   farFocalPointInInches,
-  farDistanceInInches,
+  visualSceneMaxInches,
   subject,
   focalLength,
   aperture,
   system,
   verticalFieldOfView,
   textColor,
+  dark = false,
   onChangeDistance,
 }: {
   distanceToSubjectInInches: number;
   nearFocalPointInInches: number;
   farFocalPointInInches: number;
-  farDistanceInInches: number;
+  visualSceneMaxInches: number;
   focalLength: number;
   aperture: number;
   system: string;
   verticalFieldOfView: number;
   textColor?: string;
+  dark?: boolean;
   subject: keyof typeof SUBJECTS;
   onChangeDistance?: (distance: number) => void;
 }) {
   const convertUnits = system === "Imperial" ? toImperial : toMetric;
-
   const svgRef = useRef<SVGSVGElement>(null);
-  const mouseDownRef = useRef(false);
-  function onMouseDown() {
-    mouseDownRef.current = true;
-  }
-  function onMouseUp() {
-    mouseDownRef.current = false;
-  }
-  function onMouseMove(evt: React.MouseEvent<SVGSVGElement, MouseEvent>) {
-    if (mouseDownRef.current) {
-      const pt = svgRef.current!.createSVGPoint(); // Created once for document
-
-      pt.x = evt.clientX;
-      pt.y = evt.clientY;
-
-      const cursorpt = pt.matrixTransform(
-        svgRef.current!.getScreenCTM()!.inverse()
-      );
-      const x = Math.max(5, Math.min(farDistanceInInches, cursorpt.x));
-      onChangeDistance?.(x);
-    }
-  }
+  const pointerDownRef = useRef(false);
+  const reactId = useId().replace(/:/g, "");
+  const sceneClipId = `scene-${reactId}`;
 
   const SubjectGraphic = SUBJECTS[subject].graphic;
-  const height = SUBJECTS[subject].height;
-  const textFill = textColor ?? "currentColor";
-  const clippedTextFill = "#1A202C";
-  const shouldShowVerticalLabels =
-    farFocalPointInInches - nearFocalPointInInches > 18;
+  const subjectSourceHeight = SUBJECTS[subject].height;
+  const textFill = textColor ?? "#0B1736";
 
-  function renderVerticalDistanceLabels(fill: string) {
-    return (
-      <>
-        <text
-          fill={fill}
-          fontSize={3}
-          textAnchor="start"
-          transform={`translate(${nearFocalPointInInches - 0.5} ${
-            height - 1
-          }) rotate(-90)`}
-        >
-          {convertUnits(nearFocalPointInInches, 0)}
-        </text>
-        <text
-          fill={fill}
-          fontSize={3}
-          textAnchor="start"
-          transform={`translate(${farFocalPointInInches + 0.5} 1) rotate(90)`}
-        >
-          {convertUnits(farFocalPointInInches, 0)}
-        </text>
-      </>
-    );
-  }
+  const distanceToX = (distanceInInches: number) => {
+    const t = clamp(distanceInInches, 0, visualSceneMaxInches) / visualSceneMaxInches;
+    return LENS_X + t * (SCENE_RIGHT - LENS_X);
+  };
 
-  const viewPath = buildViewPath(
-    0,
-    14.3,
-    verticalFieldOfView,
-    farDistanceInInches,
-    height
-  );
+  const subjectX = distanceToX(distanceToSubjectInInches);
+  const nearX = distanceToX(nearFocalPointInInches);
+  const farX = distanceToX(farFocalPointInInches);
+  const dofCentreX = (nearX + farX) / 2;
+  const labelX = spreadFocusLabels(nearX, dofCentreX, farX);
+
+  const halfFov = (verticalFieldOfView / 2) * (Math.PI / 180);
+  const sceneWidth = SCENE_RIGHT - LENS_X;
+  const visualRise = clamp(Math.tan(halfFov) * sceneWidth * 0.52, 72, 118);
+  const coneTopY = clamp(LENS_Y - visualRise, SCENE_TOP, LENS_Y - 26);
+  const coneBottomY = clamp(LENS_Y + visualRise, LENS_Y + 40, GROUND_Y - 8);
+
+  const desiredSubjectHeight =
+    subject === "Human"
+      ? 178
+      : subject === "Human At Desk"
+        ? 142
+        : subject === "Large Dog"
+          ? 105
+          : subject === "Medium Dog"
+            ? 82
+            : 60;
+  const subjectScale = desiredSubjectHeight / subjectSourceHeight;
+  const subjectTranslateY = GROUND_Y - desiredSubjectHeight - 2;
+
+  const sceneMaxLabel =
+    system === "Metric"
+      ? "1000 cm"
+      : formatAxisValue(system, visualSceneMaxInches, 0);
+
+  const updateFromPointer = (evt: ReactPointerEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const point = svg.createSVGPoint();
+    point.x = evt.clientX;
+    point.y = evt.clientY;
+
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return;
+
+    const local = point.matrixTransform(matrix.inverse());
+    const x = clamp(local.x, LENS_X, SCENE_RIGHT);
+    const ratio = (x - LENS_X) / (SCENE_RIGHT - LENS_X);
+    onChangeDistance?.(ratio * visualSceneMaxInches);
+  };
+
+  const onPointerDown = (evt: ReactPointerEvent<SVGSVGElement>) => {
+    pointerDownRef.current = true;
+    svgRef.current?.setPointerCapture(evt.pointerId);
+    updateFromPointer(evt);
+  };
+
+  const onPointerMove = (evt: ReactPointerEvent<SVGSVGElement>) => {
+    if (pointerDownRef.current) updateFromPointer(evt);
+  };
+
+  const onPointerUp = (evt: ReactPointerEvent<SVGSVGElement>) => {
+    pointerDownRef.current = false;
+    if (svgRef.current?.hasPointerCapture(evt.pointerId)) {
+      svgRef.current.releasePointerCapture(evt.pointerId);
+    }
+  };
+
+  const leader = (label: number, anchor: number) =>
+    Math.abs(label - anchor) > 1 ? (
+      <path
+        d={`M ${label} 66 L ${label} 73 L ${anchor} ${SCENE_TOP + 6}`}
+        fill="none"
+        stroke="#CBD5E1"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+    ) : null;
 
   return (
     <svg
       ref={svgRef}
-      onMouseDown={onMouseDown}
-      onMouseUp={onMouseUp}
-      onMouseMove={onMouseMove}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox={`-43.5 0 ${farDistanceInInches} ${height + 12}`}
-      style={{ width: "100%", height: "auto", color: textColor }}
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label="Interactive depth of field scene"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      className="h-full w-full touch-none select-none"
+      style={{ color: textFill }}
     >
       <defs>
-        <style>
-          {`
-.cls-1 {
-  stroke-width: 0px;
-}      
-`}
-        </style>
-        <clipPath id="fov">
-          <path d={viewPath} />
-        </clipPath>
-        <clipPath id="subject">
-          <rect x={0} y={0} width={500} height={height} />
+        <clipPath id={sceneClipId}>
+          <rect
+            x={LENS_X}
+            y={SCENE_TOP}
+            width={SCENE_RIGHT - LENS_X}
+            height={GROUND_Y - SCENE_TOP}
+            rx="2"
+          />
         </clipPath>
       </defs>
 
-      {/* <rect
-        x={0}
-        y={0}
-        width={farDistanceInInches}
-        height={height}
-        fill="#f3f3f3"
-      /> */}
+      <rect width={VIEW_W} height={VIEW_H} fill={dark ? "#101827" : "#FFFFFF"} />
 
-      <path d={viewPath} fill="#ccc" />
+      <g clipPath={`url(#${sceneClipId})`}>
+        <path
+          d="M 0 323 C 130 280 230 285 340 318 C 470 358 595 303 720 320 C 850 338 925 300 1000 316 L 1000 360 L 0 360 Z"
+          fill={dark ? "#182235" : "#F5F8FC"}
+        />
+        <path
+          d="M 0 336 C 160 305 290 338 400 344 C 550 352 695 314 825 334 C 905 347 957 329 1000 326 L 1000 362 L 0 362 Z"
+          fill={dark ? "#1B263A" : "#F0F4F9"}
+        />
 
-      <path
-        className="cls-1"
-        fill="currentColor"
-        transform="translate(-39.9 6) scale(0.92)"
-        d="M43.5,10.57c-.06.05-.14.06-.21.06-.56.02-1.11.02-1.67.05-.23.01-.36-.05-.39-.28-.02-.15-.09-.22-.2-.05-.1.14-.26.1-.4.1-.29.01-.36-.06-.37.34,0,.47-.33.68-.76.5-.19-.08-.29-.08-.37.14-.1.28-.32.46-.59.6-.54.28-1.13.34-1.72.45-.25.05-.51.08-.75.14-.4.09-.58.31-.59.72-.03,1.02-.14,2.04-.27,3.06-.02.15,0,.28.11.39.19.2.21.43.13.68-.42,1.3-1.01,2.51-1.85,3.59-.46.6-1.05,1.01-1.84,1.06-.1,0-.2,0-.29,0-.31-.03-.31-.04-.38.28-.18.82-.5,1.04-1.33.88-.45-.09-.86-.26-1.27-.45-.75-.35-1.47-.76-2.17-1.2-.3-.19-.3-.19-.45.12-.45.9-.88,1.8-1.35,2.68-.28.54-.48,1.1-.59,1.7-.13.7-.22,1.41-.24,2.13-.02,1.36.33,2.63.87,3.87.71,1.62,1.58,3.15,2.47,4.66.11.19.25.38.34.58.54,1.13,1.42,2.02,2.1,3.05,1.15,1.73,2.28,3.47,3.25,5.31.43.81.57,1.68.66,2.56.14,1.5-.07,2.99-.24,4.47-.2,1.69-.5,3.38-.61,5.08-.05.75,0,1.49.11,2.23.14.91.05,1.81,0,2.72-.06,1.1-.25,2.2.07,3.3.05.18.12.34.24.47.53.57,1.07,1.13,1.84,1.38.43.14.87.19,1.31.2.41.01.83.02,1.24.09.76.14,1,.83.51,1.42-.21.25-.49.4-.79.5-.52.18-1.05.25-1.6.26-1,.03-2-.08-3-.09-.32,0-.65-.01-.97,0-.41.03-.77-.08-1.12-.27-.22-.12-.45-.25-.66-.39-.13-.08-.19-.09-.17.09.02.18-.04.26-.24.25-1.15-.11-2.29-.21-3.42-.44-.15-.03-.23-.09-.23-.25-.04-.85-.11-1.7.02-2.55.08-.49.24-.95.52-1.36.08-.12.12-.25.13-.4.06-1.68.12-3.37.18-5.05.06-1.6.12-3.2.18-4.8.06-1.69.12-3.38.19-5.08.02-.44.03-.87.05-1.31,0-.1-.02-.17-.1-.23-1.31-1.11-2.62-2.21-3.93-3.32-.03-.02-.05-.06-.12-.04-.06.48-.12.97-.18,1.46-.17,1.41-.35,2.82-.52,4.23-.11.93-.23,1.85-.33,2.78-.03.25-.11.44-.31.62-2.24,1.97-4.46,3.95-6.69,5.93-1.93,1.71-3.85,3.42-5.78,5.12-.2.17-.33.36-.37.62-.05.3-.13.59-.2.88-.03.12-.03.26-.2.29-.09.01-.05.08-.01.12.91,1.13,1.91,2.09,3.49,2.13.59.01,1.19.01,1.77.18.57.16.81.68.57,1.23-.14.33-.4.54-.71.7-.56.27-1.16.37-1.77.4-1.08.05-2.16-.05-3.25-.12-.47-.03-.95-.04-1.42-.01-.49.03-.92-.11-1.33-.35-.24-.14-.48-.29-.71-.44-.12-.07-.15-.05-.16.09-.01.3-.02.31-.33.29-1.22-.11-2.44-.26-3.64-.5-.21-.04-.3-.14-.3-.36-.03-.72-.05-1.44,0-2.17.07-1.34.69-2.38,1.75-3.17.21-.15.34-.28.19-.54-.07-.13.02-.21.1-.29.99-1.06,1.98-2.13,2.97-3.19,2.09-2.23,4.17-4.47,6.33-6.63.91-.92,1.85-1.81,2.82-2.67.66-.58.88-1.29.8-2.12-.29-3.12-.9-6.18-1.75-9.18-.34-1.2-.79-2.37-1.2-3.55-.16-.46-.28-.94-.38-1.41-.05-.26-.05-.26-.31-.16-.18.07-.36.14-.54.22-.15.07-.22.03-.23-.14,0-.26-.03-.51-.04-.77-.05-1.28-.1-2.56-.16-3.83,0-.13.01-.25.05-.38.38-1.16.74-2.32,1.13-3.48.14-.41.36-.8.55-1.19.45-.93.89-1.88,1.24-2.86.18-.51.25-1.04.31-1.57.18-1.5.62-2.93,1.11-4.34.82-2.38,1.74-4.73,2.85-7,.45-.92.93-1.83,1.6-2.61.52-.61,1.15-1.04,1.98-1.09.04,0,.08-.02.11,0,.35.11.51-.09.68-.35.17-.28.42-.49.65-.72.12-.11.21-.13.35-.02.47.36.94.7,1.41,1.05.21.16.21.16.31-.09.28-.71.4-1.46.58-2.2.23-.93.61-1.77,1.39-2.36.91-.7,1.95-1.09,3.09-1.24.95-.12,1.77.15,2.49.76.67.57,1.38,1.07,2.15,1.48.16.09.31.19.45.31.44.37.46.84.05,1.25-.23.24-.53.37-.84.48-.17.06-.23.14-.23.33,0,.48.07.94.15,1.41.04.26.21.22.38.22.17,0,.26-.04.28-.23.03-.34.04-.34.38-.35.53,0,1.05,0,1.58-.02.21,0,.28.07.27.27-.01.28,0,.56,0,.84-.01.21.07.27.27.27,1-.01,2,0,3-.02.28,0,.55-.03.65.34.1-.08.13-.17.15-.25.06-.25.22-.32.46-.31.58.03,1.16.03,1.74.05v3.34ZM33.26,9.74c-.21.19-.32.38-.44.57-.31.51-.53,1.06-.76,1.61-.07.16-.15.3-.35.29-.99-.04-1.87-.28-2.31-1.3-.05-.13-.12-.15-.24-.09-.25.13-.51.27-.77.39-.15.07-.15.15-.07.28.31.5.62,1,.92,1.5.08.13.16.16.29.1.28-.14.56-.08.82.08.13.08.25.16.38.24.34.22.56.21.85-.07.27-.25.51-.53.76-.8.21-.23.45-.44.59-.71.32-.64.36-1.34.32-2.09ZM32.35,13.46c-.55.37-1.11.7-1.67,1.03-.1.06-.08.13,0,.2.21.21.42.43.63.64.09.09.14.1.23,0,.48-.53.6-1.21.81-1.87Z"
-        clipPath="url(#subject)"
-      />
+        <g fill={dark ? "#26344A" : "#E9EFF6"} opacity="0.86">
+          <g transform="translate(190 282)">
+            <rect x="-3" y="30" width="6" height="27" rx="2" />
+            <circle cy="18" r="20" />
+            <circle cx="-13" cy="24" r="13" />
+            <circle cx="14" cy="24" r="14" />
+          </g>
+          <g transform="translate(300 294) scale(.82)">
+            <rect x="-3" y="30" width="6" height="27" rx="2" />
+            <circle cy="18" r="20" />
+            <circle cx="-13" cy="24" r="13" />
+            <circle cx="14" cy="24" r="14" />
+          </g>
+          <g transform="translate(892 282) scale(1.08)">
+            <rect x="-3" y="30" width="6" height="27" rx="2" />
+            <circle cy="18" r="20" />
+            <circle cx="-13" cy="24" r="13" />
+            <circle cx="14" cy="24" r="14" />
+          </g>
+        </g>
+
+        <path
+          d={`M ${LENS_X} ${LENS_Y} L ${SCENE_RIGHT} ${coneTopY} L ${SCENE_RIGHT} ${coneBottomY} Z`}
+          fill={dark ? "#334155" : "#D9DEE5"}
+          opacity={dark ? 0.72 : 0.9}
+        />
+
+        <rect
+          x={nearX}
+          y={SCENE_TOP}
+          width={Math.max(0, farX - nearX)}
+          height={GROUND_Y - SCENE_TOP}
+          fill="#E65E65"
+          fillOpacity={dark ? 0.16 : 0.14}
+        />
+      </g>
 
       <line
-        x1={nearFocalPointInInches}
-        y1={height + 7}
-        x2={nearFocalPointInInches}
-        y2={height + 9}
-        stroke="#aaa"
-        strokeWidth={0.2}
+        x1={nearX}
+        y1={SCENE_TOP}
+        x2={nearX}
+        y2={GROUND_Y + 2}
+        stroke="#E65E65"
+        strokeWidth="1.25"
+        strokeDasharray="4 4"
+        vectorEffect="non-scaling-stroke"
       />
       <line
-        x1={farFocalPointInInches}
-        y1={height + 7}
-        x2={farFocalPointInInches}
-        y2={height + 9}
-        stroke="#aaa"
-        strokeWidth={0.2}
+        x1={farX}
+        y1={SCENE_TOP}
+        x2={farX}
+        y2={GROUND_Y + 2}
+        stroke="#E65E65"
+        strokeWidth="1.25"
+        strokeDasharray="4 4"
+        vectorEffect="non-scaling-stroke"
       />
       <line
-        x1={nearFocalPointInInches}
-        y1={height + 8}
-        x2={farFocalPointInInches}
-        y2={height + 8}
-        stroke="#aaa"
-        strokeWidth={0.2}
+        x1={subjectX}
+        y1={SCENE_TOP + 4}
+        x2={subjectX}
+        y2={GROUND_Y + 2}
+        stroke="#2563EB"
+        strokeWidth="1.05"
+        strokeDasharray="3 4"
+        vectorEffect="non-scaling-stroke"
+        opacity="0.75"
       />
-      <text
-        x={
-          nearFocalPointInInches +
-          (farFocalPointInInches - nearFocalPointInInches) / 2
-        }
-        y={height + 10.7}
-        fill={textFill}
-        fontSize={3}
-        textAnchor="middle"
-      >
-        {convertUnits(farFocalPointInInches - nearFocalPointInInches)}
-      </text>
 
-      <text
-        x={-1}
-        y={5}
-        fill={textFill}
-        fontSize={4}
-        fontWeight="bold"
-        textAnchor="end"
-      >
-        {focalLength}mm f/{aperture}
-      </text>
+      {leader(labelX.near, nearX)}
+      {leader(labelX.centre, dofCentreX)}
+      {leader(labelX.far, farX)}
 
-      {shouldShowVerticalLabels && renderVerticalDistanceLabels(textFill)}
-      <text
-        x={distanceToSubjectInInches}
-        y={height + 3.5}
-        fill={textFill}
-        fontSize={3}
-        textAnchor="middle"
-      >
-        {convertUnits(distanceToSubjectInInches, 0)}
-      </text>
+      <g fontFamily="DM Sans Variable, DM Sans, ui-sans-serif, system-ui, sans-serif" fontSize="11.5" fontWeight="700">
+        <text x={labelX.near} y="37" fill={textFill} textAnchor="middle">Near focus</text>
+        <text x={labelX.near} y="53" fill={textFill} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
 
-      <g fill="#aaa">
-        <g transform={`translate(${distanceToSubjectInInches})`}>
-          <SubjectGraphic />
+        <text x={labelX.centre} y="37" fill="#E24F58" textAnchor="middle">Depth of field</text>
+        <text x={labelX.centre} y="53" fill="#E24F58" textAnchor="middle">{convertUnits(Math.max(0, farFocalPointInInches - nearFocalPointInInches), 0)}</text>
+
+        <text x={labelX.far} y="37" fill={textFill} textAnchor="middle">Far focus</text>
+        <text x={labelX.far} y="53" fill={textFill} textAnchor="middle">{convertUnits(farFocalPointInInches, 0)}</text>
+      </g>
+
+      <g
+        fill={dark ? "#DCE7F5" : "#17213A"}
+        transform="translate(135 138) scale(2.9)"
+      >
+        <g transform="translate(-39.9 6) scale(0.92)">
+          <PhotographerGraphic />
         </g>
       </g>
-      <g clipPath="url(#fov)">
-        <g transform={`translate(${distanceToSubjectInInches})`}>
-          <SubjectGraphic />
-        </g>
+
+      <g
+        fill={dark ? "#E6BFC2" : "#4A171A"}
+        transform={`translate(${subjectX} ${subjectTranslateY}) scale(${subjectScale})`}
+      >
+        <SubjectGraphic />
       </g>
-      {shouldShowVerticalLabels && (
-        <g clipPath="url(#fov)">
-          {renderVerticalDistanceLabels(clippedTextFill)}
-        </g>
-      )}
 
-      <line
-        x1={distanceToSubjectInInches}
-        y1={0}
-        x2={distanceToSubjectInInches}
-        y2={height}
-        stroke="#aaa"
-        strokeWidth={0.2}
-      />
+      <text
+        x="72"
+        y="150"
+        fill={textFill}
+        fontFamily="DM Sans Variable, DM Sans, ui-sans-serif, system-ui, sans-serif"
+        fontSize="12"
+        fontWeight="800"
+      >
+        {focalLength}mm&nbsp;&nbsp;f/{aperture.toFixed(1)}
+      </text>
 
-      <rect
-        x={nearFocalPointInInches}
-        y={0}
-        width={farFocalPointInInches - nearFocalPointInInches}
-        height={height}
-        fill="red"
-        fillOpacity={0.2}
-      />
+      <line x1={AXIS_LEFT} y1={AXIS_Y} x2={SCENE_RIGHT} y2={AXIS_Y} stroke={dark ? "#52627A" : "#94A3B8"} strokeWidth="1" />
+
+      {[AXIS_LEFT, nearX, subjectX, farX, SCENE_RIGHT].map((x, index) => (
+        <line
+          key={`${x}-${index}`}
+          x1={x}
+          y1={AXIS_Y - 5}
+          x2={x}
+          y2={AXIS_Y + 5}
+          stroke={dark ? "#6B7C95" : "#94A3B8"}
+          strokeWidth="1"
+        />
+      ))}
+
+      <g fill={dark ? "#AAB7CB" : "#5E6E86"} fontFamily="DM Sans Variable, DM Sans, ui-sans-serif, system-ui, sans-serif" fontSize="10.5" fontWeight="600">
+        <text x={AXIS_LEFT} y={AXIS_Y + 23} textAnchor="start">0 cm</text>
+        <text x={nearX} y={AXIS_Y + 23} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
+        <text x={subjectX} y={AXIS_Y + 23} textAnchor="middle" fill={textFill} fontWeight="800">{convertUnits(distanceToSubjectInInches, 0)}</text>
+        <text x={farX} y={AXIS_Y + 23} textAnchor="middle">{convertUnits(farFocalPointInInches, 0)}</text>
+        <text x={SCENE_RIGHT} y={AXIS_Y + 23} textAnchor="end">{sceneMaxLabel}</text>
+      </g>
+
+      <line x1={nearX} y1={BRACKET_Y} x2={farX} y2={BRACKET_Y} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
+      <line x1={nearX} y1={BRACKET_Y - 6} x2={nearX} y2={BRACKET_Y + 6} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
+      <line x1={farX} y1={BRACKET_Y - 6} x2={farX} y2={BRACKET_Y + 6} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
+      <text
+        x={dofCentreX}
+        y={BRACKET_Y + 25}
+        fill={textFill}
+        textAnchor="middle"
+        fontFamily="DM Sans Variable, DM Sans, ui-sans-serif, system-ui, sans-serif"
+        fontSize="11"
+        fontWeight="800"
+      >
+        {convertUnits(Math.max(0, farFocalPointInInches - nearFocalPointInInches), 1)}
+      </text>
     </svg>
   );
 }

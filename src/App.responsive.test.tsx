@@ -35,24 +35,17 @@ async function startVite(port: number) {
   );
 
   let output = "";
-  server.stdout.on("data", (chunk) => {
-    output += chunk.toString();
-  });
-  server.stderr.on("data", (chunk) => {
-    output += chunk.toString();
-  });
+  server.stdout.on("data", (chunk) => (output += chunk.toString()));
+  server.stderr.on("data", (chunk) => (output += chunk.toString()));
 
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     try {
       const response = await fetch(appUrl);
-      if (response.ok) {
-        return { server, appUrl };
-      }
+      if (response.ok) return { server, appUrl };
     } catch {
-      // Keep polling until the dev server accepts connections.
+      // keep polling
     }
-
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
@@ -62,7 +55,7 @@ async function startVite(port: number) {
 
 const localChromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
-test("sensor select has enough visible width on narrow mobile screens", async () => {
+test("reference desktop fits without document or settings-panel scrolling", async () => {
   const port = await getOpenPort();
   const { server, appUrl } = await startVite(port);
 
@@ -71,22 +64,51 @@ test("sensor select has enough visible width on narrow mobile screens", async ()
       headless: true,
       ...(existsSync(localChromePath) ? { executablePath: localChromePath } : {}),
     });
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 
+    const page = await browser.newPage({ viewport: { width: 1448, height: 1086 } });
     await page.goto(appUrl, { waitUntil: "networkidle" });
 
-    const sensorSelect = page.getByRole("combobox").first();
-    const width = await sensorSelect.evaluate((select) => ({
-      client: select.clientWidth,
-      scroll: select.scrollWidth,
+    const documentMetrics = await page.evaluate(() => ({
+      scrollHeight: document.documentElement.scrollHeight,
+      clientHeight: document.documentElement.clientHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
     }));
 
-    await browser.close();
+    assert.ok(
+      documentMetrics.scrollHeight <= documentMetrics.clientHeight + 1,
+      `desktop page scrolls vertically: ${JSON.stringify(documentMetrics)}`
+    );
+    assert.ok(
+      documentMetrics.scrollWidth <= documentMetrics.clientWidth + 1,
+      `desktop page scrolls horizontally: ${JSON.stringify(documentMetrics)}`
+    );
+
+    const settings = page.getByTestId("settings-panel");
+    const settingsMetrics = await settings.evaluate((element) => ({
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    }));
 
     assert.ok(
-      width.client >= width.scroll,
-      `expected sensor select visible width ${width.client}px to fit ${width.scroll}px of content`
+      settingsMetrics.scrollHeight <= settingsMetrics.clientHeight + 1,
+      `settings panel scrolls internally: ${JSON.stringify(settingsMetrics)}`
     );
+
+    const simulatorBox = await page.getByTestId("simulator-card").boundingBox();
+    const settingsBox = await settings.boundingBox();
+    const footerBox = await page.getByTestId("app-footer").boundingBox();
+
+    assert.ok(simulatorBox && settingsBox && footerBox, "expected layout boxes to exist");
+    assert.ok(Math.abs(simulatorBox.y - settingsBox.y) <= 3, "main columns should align at the top");
+    assert.ok(footerBox.y + footerBox.height <= 1086 + 1, "footer should remain inside the reference viewport");
+
+    await page.screenshot({
+      path: "artifacts/dof-1448x1086.png",
+      fullPage: false,
+    });
+
+    await browser.close();
   } finally {
     server.kill();
     await once(server, "exit").catch(() => undefined);

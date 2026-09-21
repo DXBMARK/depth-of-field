@@ -3,42 +3,27 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import PhotographyGraphic from "./PhotographyGraphic";
 
-test("applies an explicit fill to SVG labels so they stay visible in dark mode", () => {
+test("renders the normalized accessible scene with focus labels", () => {
   const markup = renderToStaticMarkup(
     <PhotographyGraphic
-      distanceToSubjectInInches={72}
-      nearFocalPointInInches={60}
-      farFocalPointInInches={90}
-      farDistanceInInches={360}
+      distanceToSubjectInInches={612.1 / 2.54}
+      nearFocalPointInInches={535 / 2.54}
+      farFocalPointInInches={715 / 2.54}
+      visualSceneMaxInches={1000 / 2.54}
       subject="Human"
-      focalLength={50}
+      focalLength={47}
       aperture={1.8}
-      system="Imperial"
-      verticalFieldOfView={27}
-      textColor="#f7fafc"
+      system="Metric"
+      verticalFieldOfView={28.6}
+      textColor="#0B1736"
     />
   );
 
-  assert.match(markup, /<text[^>]*fill="#f7fafc"/i);
-});
-
-test("renders vertical distance labels with a dark clipped overlay inside the field-of-view area", () => {
-  const markup = renderToStaticMarkup(
-    <PhotographyGraphic
-      distanceToSubjectInInches={72}
-      nearFocalPointInInches={60}
-      farFocalPointInInches={90}
-      farDistanceInInches={360}
-      subject="Human"
-      focalLength={50}
-      aperture={1.8}
-      system="Imperial"
-      verticalFieldOfView={27}
-      textColor="#f7fafc"
-    />
-  );
-
-  assert.match(markup, /clip-path="url\(#fov\)"/i);
-  assert.match(markup, /<text[^>]*fill="#1a202c"[^>]*rotate\(-90\)/i);
-  assert.match(markup, /<text[^>]*fill="#1a202c"[^>]*rotate\(90\)/i);
+  assert.match(markup, /viewBox="0 0 1000 470"/i);
+  assert.match(markup, /preserveAspectRatio="xMidYMid meet"/i);
+  assert.match(markup, /role="img"/i);
+  assert.match(markup, /Near focus/i);
+  assert.match(markup, /Depth of field/i);
+  assert.match(markup, /Far focus/i);
+  assert.doesNotMatch(markup, /preserveAspectRatio="none"/i);
 });
