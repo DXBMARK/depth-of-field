@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { chromium } from "playwright";
 
 const VITE_BIN = fileURLToPath(
@@ -59,12 +60,17 @@ async function startVite(port: number) {
   throw new Error(`Vite server did not start:\n${output}`);
 }
 
+const localChromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+
 test("sensor select has enough visible width on narrow mobile screens", async () => {
   const port = await getOpenPort();
   const { server, appUrl } = await startVite(port);
 
   try {
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+      headless: true,
+      ...(existsSync(localChromePath) ? { executablePath: localChromePath } : {}),
+    });
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 
     await page.goto(appUrl, { waitUntil: "networkidle" });
