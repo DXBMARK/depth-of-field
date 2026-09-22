@@ -29,25 +29,26 @@ const BASE_SCENE_MAX_INCHES = 1000 / 2.54;
 const DEFAULT_DISTANCE_MAX_INCHES = BASE_SCENE_MAX_INCHES;
 
 const CIRCLES: Record<string, { coc: number; height: number; crop: number }> = {
-  Webcam: { coc: 0.002, height: 3.6, crop: 9.6 },
-  Smartphone: { coc: 0.002, height: 7.3, crop: 6.1 },
+  "Webcam (example)": { coc: 0.002, height: 3.6, crop: 9.6 },
+  "Smartphone (example)": { coc: 0.002, height: 7.3, crop: 6.1 },
   "35mm (full frame)": { coc: 0.029, height: 24, crop: 1 },
-  "APS-C": { coc: 0.019, height: 15.6, crop: 1.52 },
+  "APS-C (1.5x)": { coc: 0.02, height: 15.6, crop: 1.53 },
+  "APS-C Canon (1.6x)": { coc: 0.019, height: 14.8, crop: 1.61 },
   "Micro Four Thirds": { coc: 0.015, height: 13, crop: 2 },
-  "6x6 (Medium Format)": { coc: 0.02, height: 60, crop: 0.55 },
-  "6x7 (Medium Format)": { coc: 0.025, height: 70, crop: 0.47 },
+  "6x6 Film (55.6x55.6)": { coc: 0.045, height: 55.6, crop: 0.55 },
+  "6x7 Film (56x69.5)": { coc: 0.06, height: 56, crop: 0.485 },
 };
 
 const PRESETS = [
-  ["Webcam", 3.6, 2.8, 36, "Webcam"],
-  ["Smartphone", 4.3, 2, 36, "Smartphone"],
-  ["APS-C 35mm", 35, 1.8, 72, "APS-C"],
+  ["Webcam example", 3.6, 2.8, 36, "Webcam (example)"],
+  ["Smartphone example", 4.3, 2, 36, "Smartphone (example)"],
+  ["APS-C 35mm", 35, 1.8, 72, "APS-C (1.5x)"],
   ["FF 28mm", 28, 1.4, 48, "35mm (full frame)"],
   ["FF 35mm", 35, 1.4, 60, "35mm (full frame)"],
   ["FF 50mm", 50, 1.8, 72, "35mm (full frame)"],
   ["FF 70mm", 70, 2.8, 96, "35mm (full frame)"],
-  ["6x6 80mm", 80, 2.8, 90, "6x6 (Medium Format)"],
-  ["6x7 80mm", 80, 2.8, 80, "6x7 (Medium Format)"],
+  ["6x6 80mm", 80, 2.8, 90, "6x6 Film (55.6x55.6)"],
+  ["6x7 80mm", 80, 4, 80, "6x7 Film (56x69.5)"],
 ] as const;
 
 const APERTURE_STOPS = [
@@ -219,8 +220,8 @@ function ParameterSlider({
     : SLIDER_RESOLUTION;
 
   return (
-    <section className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-soft xl:py-3">
-      <div className="mb-2.5 flex items-center justify-between gap-3">
+    <section className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-soft xl:py-2.5">
+      <div className="mb-2.5 flex items-center justify-between gap-3 xl:mb-2">
         <span
           id={`${id}-label`}
           className="flex items-center gap-2 text-[13px] font-bold leading-none text-ink"
@@ -279,7 +280,7 @@ function ParameterSlider({
         </SliderPrimitive.Control>
       </SliderPrimitive.Root>
 
-      <div className="relative mt-1.5 hidden h-4 text-[10.5px] font-medium text-secondary sm:block">
+      <div className="relative mt-1.5 hidden h-4 text-[10.5px] font-medium text-secondary sm:block xl:mt-1">
         {marks.map((mark) => {
           const position = discreteValues
             ? (findNearestIndex(mark.value, discreteValues) /
@@ -290,22 +291,31 @@ function ParameterSlider({
           return (
             <span
               key={`${mark.label}-${mark.value}`}
-              className={cn(
-                "absolute top-0 whitespace-nowrap",
-                position <= 1
-                  ? "translate-x-0"
-                  : position >= 99
-                    ? "-translate-x-full"
-                    : "-translate-x-1/2"
-              )}
+              className="absolute top-0 h-4"
               style={{ left: `${position}%` }}
             >
-              {mark.label}
+              <span
+                aria-hidden="true"
+                data-testid={`${id}-mark-tick-${mark.value}`}
+                className="absolute -top-1.5 left-0 h-1.5 w-px bg-line-strong"
+              />
+              <span
+                className={cn(
+                  "absolute top-0 whitespace-nowrap",
+                  position <= 4
+                    ? "translate-x-0 text-left"
+                    : position >= 82
+                      ? "-translate-x-full text-right"
+                      : "-translate-x-1/2 text-center"
+                )}
+              >
+                {mark.label}
+              </span>
             </span>
           );
         })}
       </div>
-      <p className="mt-2 text-[11.5px] leading-[17px] text-secondary xl:whitespace-nowrap">{lesson}</p>
+      <p className="mt-2 text-[11.5px] leading-[17px] text-secondary xl:mt-1.5 xl:whitespace-nowrap">{lesson}</p>
       {note ? <p className="mt-1 text-[10.5px] font-semibold text-muted">{note}</p> : null}
     </section>
   );
@@ -403,7 +413,10 @@ function ShootingModeCard({
         <div className="min-w-0">
           <h2 className="text-balance text-[13px] font-extrabold text-ink">Shooting Mode</h2>
           <p className="mt-0.5 max-w-[300px] text-pretty text-[11.5px] leading-4 text-secondary">
-            Choose a single-subject or group/event setup.
+            Choose a visual single-subject or group/event scenario.
+          </p>
+          <p className="mt-1 text-[10.5px] leading-4 text-muted">
+            Scenario selection does not change the optical calculation.
           </p>
         </div>
       </div>
@@ -666,9 +679,9 @@ function App() {
 
           <aside
             data-testid="settings-panel"
-            className="rounded-lg border border-line bg-surface p-4 shadow-panel"
+            className="rounded-lg border border-line bg-surface p-4 shadow-panel xl:self-stretch xl:p-3.5"
           >
-            <div className="mb-3 flex items-start gap-3">
+            <div className="mb-3 flex items-start gap-3 xl:mb-2.5">
               <FontAwesomeIcon icon={faGear} className="mt-0.5 size-7 text-signal" />
               <div>
                 <h2 className="text-balance text-[17px] font-extrabold leading-5 text-ink">Camera &amp; Scene Settings</h2>
@@ -678,7 +691,7 @@ function App() {
               </div>
             </div>
 
-            <section className="flex min-h-[60px] items-center justify-between gap-4 rounded-lg border border-line bg-surface px-3 py-2 shadow-soft">
+            <section className="flex min-h-[60px] items-center justify-between gap-4 rounded-lg border border-line bg-surface px-3 py-2 shadow-soft xl:min-h-[56px]">
               <span className="flex items-center gap-2.5 text-[13px] font-extrabold text-ink">
                 <FontAwesomeIcon icon={faRulerCombined} className="h-[16px] w-[16px] text-signal" />
                 Units
@@ -702,7 +715,7 @@ function App() {
               </div>
             </section>
 
-            <div className="mt-3 space-y-3">
+            <div className="mt-3 space-y-3 xl:mt-2.5 xl:space-y-2">
               <ParameterSlider
                 id="subject-distance"
                 label="Distance to subject"
@@ -714,7 +727,7 @@ function App() {
                 update={setDistance}
                 icon={faRulerCombined}
                 marks={distanceMarks}
-                lesson="Closer subjects reduce DOF; greater distance increases it."
+                lesson="At fixed lens settings, greater distance increases DOF."
               />
 
               <ParameterSlider
@@ -729,7 +742,7 @@ function App() {
                 icon={faMagnifyingGlass}
                 scale="log"
                 marks={FOCAL_MARKS}
-                lesson="Longer focal lengths narrow the view and reduce DOF."
+                lesson="At the same distance, longer focal lengths narrow the view and reduce DOF."
                 note={sensor !== "35mm (full frame)" ? `${equivalent} mm full-frame equivalent` : undefined}
               />
 
@@ -752,7 +765,7 @@ function App() {
                   { label: "f/11", value: 11 },
                   { label: "f/22", value: 22 },
                 ]}
-                lesson="Lower f-numbers reduce DOF; higher f-numbers increase it."
+                lesson="At the same distance, wider apertures reduce DOF."
               />
             </div>
 
@@ -762,7 +775,7 @@ function App() {
               </p>
             ) : null}
 
-            <section className="mt-3 grid grid-cols-2 gap-3">
+            <section className="mt-3 grid grid-cols-2 gap-3 xl:mt-2.5">
               <label className="block text-[12px] font-extrabold text-ink">
                 <span className="mb-2 flex items-center gap-2">
                   <FontAwesomeIcon icon={faCamera} className="h-[15px] w-[15px] text-signal" />
@@ -816,11 +829,18 @@ function App() {
               ) : null}
             </section>
 
-            <section className="mt-3 rounded-lg border border-line bg-surface px-3 py-3 shadow-soft">
+            <section className="mt-3 rounded-lg border border-line bg-surface px-3 py-3 shadow-soft xl:mt-2.5 xl:py-2.5">
               <div className="mb-2.5 flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2 text-[12px] font-extrabold text-ink">
                   <FontAwesomeIcon icon={faCamera} className="h-[14px] w-[14px] text-signal" />
                   Quick Presets
+                  <span
+                    aria-label="Representative starting points. Smartphone and webcam specifications vary by model."
+                    title="Representative starting points. Smartphone and webcam specifications vary by model."
+                    className="inline-flex text-muted"
+                  >
+                    <FontAwesomeIcon icon={faCircleInfo} className="h-[12px] w-[12px]" />
+                  </span>
                 </span>
                 <span className="text-right text-[10.5px] leading-4 text-muted">Common starting points.</span>
               </div>
@@ -836,8 +856,8 @@ function App() {
                       className={cn(
                         "h-11 rounded-md border px-3 text-[11px] font-extrabold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 sm:h-9 xl:h-[34px]",
                         active
-                          ? "border-signal bg-signal-soft text-signal"
-                          : "border-line bg-white text-ink hover:border-signal/40 hover:bg-signal-soft/50 hover:text-signal"
+                          ? "border-signal bg-signal-soft text-signal dark:border-blue-400/60 dark:bg-blue-500/15 dark:text-blue-300"
+                          : "border-line bg-surface text-ink hover:border-signal/40 hover:bg-signal-soft/50 hover:text-signal dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
                       )}
                     >
                       {name}
@@ -899,6 +919,9 @@ function App() {
                 <h2 id="help-title" className="text-lg font-extrabold text-ink">How the simulator works</h2>
                 <p className="mt-2 text-sm leading-6 text-secondary">
                   Distance, focal length, aperture and sensor size all affect the near and far limits of acceptable sharpness. Change one control at a time and watch the focus region and calculated values update together.
+                </p>
+                <p className="mt-3 rounded-lg border border-line bg-surface-soft px-3 py-2 text-sm leading-6 text-secondary">
+                  For real-camera comparisons, measure subject distance from the camera’s focal-plane mark (Φ), not from the front of the lens.
                 </p>
               </div>
               <button

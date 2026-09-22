@@ -94,9 +94,9 @@ function spreadFocusLabels(
   farAnchor: number,
   sceneRight: number
 ) {
-  const minGap = 88;
-  const minX = LENS_X + 48;
-  const maxX = sceneRight - 48;
+  const minGap = 96;
+  const minX = LENS_X + 76;
+  const maxX = sceneRight - 76;
 
   let near = clamp(nearAnchor, minX, maxX);
   let centre = clamp(centreAnchor, minX, maxX);
@@ -447,14 +447,20 @@ export default function PhotographyGraphic({
       {leader(labelX.far, farX)}
 
       <g fontFamily="DM Sans Variable, DM Sans, ui-sans-serif, system-ui, sans-serif" fontSize="11.5" fontWeight="700">
-        <text x={labelX.near} y="37" fill={textFill} textAnchor="middle">Near focus</text>
-        <text x={labelX.near} y="53" fill={textFill} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
+        <g data-testid="focus-label-near">
+          <text x={labelX.near} y="37" fill={textFill} textAnchor="middle">Near focus</text>
+          <text x={labelX.near} y="53" fill={textFill} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
+        </g>
 
-        <text x={labelX.centre} y="37" fill="#E24F58" textAnchor="middle">Depth of field</text>
-        <text x={labelX.centre} y="53" fill="#E24F58" textAnchor="middle">{depthLabel}</text>
+        <g data-testid="focus-label-dof">
+          <text x={labelX.centre} y="37" fill="#E24F58" textAnchor="middle">Depth of field</text>
+          <text x={labelX.centre} y="53" fill="#E24F58" textAnchor="middle">{depthLabel}</text>
+        </g>
 
-        <text x={labelX.far} y="37" fill={textFill} textAnchor="middle">Far focus</text>
-        <text x={labelX.far} y="53" fill={textFill} textAnchor="middle">{farLabel}</text>
+        <g data-testid="focus-label-far">
+          <text x={labelX.far} y="37" fill={textFill} textAnchor="middle">Far focus</text>
+          <text x={labelX.far} y="53" fill={textFill} textAnchor="middle">{farLabel}</text>
+        </g>
       </g>
 
       <g
