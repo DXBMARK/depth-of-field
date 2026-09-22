@@ -205,15 +205,44 @@ test("reference desktop fits and aligns the settings and help bottoms", async ()
     });
 
     await page.getByRole("button", { name: "Switch to dark mode" }).click();
-    await page.waitForTimeout(200);
+
+    await page
+      .getByRole("button", { name: "Switch to light mode" })
+      .waitFor({ state: "visible" });
+
+    const appShellClass =
+      (await page.getByTestId("app-shell").getAttribute("class")) ?? "";
+
+    assert.match(appShellClass, /\bdark\b/);
+
     await assertFocusLabelsContained(page, "dark mode");
     const preset = page.getByRole("button", { name: "Webcam example" });
+
+    await page.waitForFunction(() => {
+      const button = [...document.querySelectorAll("button")].find(
+        (element) => element.textContent?.trim() === "Webcam example"
+      );
+
+      if (!(button instanceof HTMLElement)) {
+        return false;
+      }
+
+      const style = getComputedStyle(button);
+
+      return (
+        style.backgroundColor === "rgb(15, 23, 42)" &&
+        style.color === "rgb(241, 245, 249)"
+      );
+    });
+
     const colors = await preset.evaluate((element) => {
       const style = getComputedStyle(element);
       return { color: style.color, backgroundColor: style.backgroundColor };
     });
+
     assert.equal(colors.backgroundColor, "rgb(15, 23, 42)", JSON.stringify(colors));
     assert.equal(colors.color, "rgb(241, 245, 249)");
+
     const ratio = contrastRatio(colors.color, colors.backgroundColor);
     assert.ok(ratio >= 4.5, `dark preset contrast ${ratio}: ${JSON.stringify(colors)}`);
 
