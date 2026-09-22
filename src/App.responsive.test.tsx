@@ -121,6 +121,38 @@ test("reference desktop fits without document or settings-panel scrolling", asyn
   });
 });
 
+test("focal scale exposes the full logarithmic range", async () => {
+  await withApp({ width: 1448, height: 1086 }, async (page) => {
+    for (const label of ["3mm", "14mm", "28mm", "50mm", "85mm", "200mm", "400mm"]) {
+      assert.equal(await page.getByText(label, { exact: true }).count(), 1);
+    }
+
+    assert.equal(
+      await page.getByTestId("focal-length-value").textContent(),
+      "47 mm"
+    );
+  });
+});
+
+test("scene viewBox matches the wide frame without stretching", async () => {
+  await withApp({ width: 1448, height: 1086 }, async (page) => {
+    const frame = await page.getByTestId("scene-frame").boundingBox();
+    const svg = page.getByTestId("scene-svg");
+    const viewBox = (await svg.getAttribute("viewBox"))?.split(/\s+/).map(Number);
+
+    assert.ok(frame && viewBox && viewBox.length === 4);
+
+    const frameRatio = frame.width / frame.height;
+    const viewBoxRatio = viewBox[2] / viewBox[3];
+
+    assert.ok(
+      Math.abs(frameRatio - viewBoxRatio) < 0.12,
+      `scene ratio mismatch: frame=${frameRatio}, viewBox=${viewBoxRatio}`
+    );
+    assert.equal(await svg.getAttribute("preserveAspectRatio"), "xMidYMid meet");
+  });
+});
+
 test("distance changes subject and focus geometry without changing FOV", async () => {
   await withApp({ width: 1448, height: 1086 }, async (page) => {
     const subject = page.getByTestId("scene-subject");
@@ -287,6 +319,10 @@ test("setting hyperfocal expands the scene and exposes infinity", async () => {
     const focusPlaneX = Number(
       await page.getByTestId("subject-focus-plane").getAttribute("x1")
     );
+    const viewBoxWidth = Number(
+      (await page.getByTestId("scene-svg").getAttribute("viewBox"))
+        ?.split(/\s+/)[2]
+    );
     const subjectBox = await subject.boundingBox();
     const sceneBox = await page.getByTestId("scene-frame").boundingBox();
     const farCard = page.locator("article").filter({ hasText: "Far Focus" });
@@ -302,7 +338,10 @@ test("setting hyperfocal expands the scene and exposes infinity", async () => {
 
     assert.ok(subjectBox && sceneBox);
     assert.ok(subjectBox.x >= sceneBox.x && subjectBox.x < sceneBox.x + sceneBox.width);
-    assert.ok(focusPlaneX < 940, `subject focus plane pinned to scene edge: ${focusPlaneX}`);
+    assert.ok(
+      focusPlaneX < viewBoxWidth - 60,
+      `subject focus plane pinned to scene edge: ${focusPlaneX}/${viewBoxWidth}`
+    );
     assert.match((await farCard.locator("p").last().textContent()) ?? "", /∞/);
     assert.ok(settingsMetrics.scrollHeight <= settingsMetrics.clientHeight + 1);
     assert.ok(documentMetrics.scrollWidth <= documentMetrics.clientWidth + 1);

@@ -1,4 +1,4 @@
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { toImperial, toMetric } from "./utils/units";
 
@@ -72,13 +72,13 @@ export const SUBJECTS = {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-const VIEW_W = 1000;
+const BASE_VIEW_W = 1000;
 const VIEW_H = 470;
+const SCENE_RIGHT_GUTTER = 45;
 const SCENE_TOP = 72;
 const GROUND_Y = 334;
 const LENS_X = 145;
 const LENS_Y = 188;
-const SCENE_RIGHT = 955;
 const AXIS_Y = 365;
 const BRACKET_Y = 420;
 
@@ -88,10 +88,15 @@ const PhotographerGraphic = () => (
   />
 );
 
-function spreadFocusLabels(nearAnchor: number, centreAnchor: number, farAnchor: number) {
+function spreadFocusLabels(
+  nearAnchor: number,
+  centreAnchor: number,
+  farAnchor: number,
+  sceneRight: number
+) {
   const minGap = 88;
   const minX = LENS_X + 48;
-  const maxX = SCENE_RIGHT - 48;
+  const maxX = sceneRight - 48;
 
   let near = clamp(nearAnchor, minX, maxX);
   let centre = clamp(centreAnchor, minX, maxX);
@@ -150,6 +155,7 @@ export default function PhotographyGraphic({
 }) {
   const convertUnits = system === "Imperial" ? toImperial : toMetric;
   const svgRef = useRef<SVGSVGElement>(null);
+  const [viewWidth, setViewWidth] = useState(BASE_VIEW_W);
   const pointerDownRef = useRef(false);
   const reactId = useId().replace(/:/g, "");
   const sceneClipId = `scene-${reactId}`;
@@ -158,7 +164,41 @@ export default function PhotographyGraphic({
   const subjectSourceHeight = SUBJECTS[subject].height;
   const textFill = textColor ?? "#0B1736";
 
-  const sceneSpan = SCENE_RIGHT - LENS_X;
+  useEffect(() => {
+    const svg = svgRef.current;
+
+    if (!svg || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const updateViewBox = () => {
+      const rect = svg.getBoundingClientRect();
+
+      if (rect.width <= 0 || rect.height <= 0) {
+        return;
+      }
+
+      const requiredWidth = (rect.width / rect.height) * VIEW_H;
+      const nextWidth = clamp(Math.round(requiredWidth), BASE_VIEW_W, 1600);
+
+      setViewWidth((current) =>
+        Math.abs(current - nextWidth) > 1 ? nextWidth : current
+      );
+    };
+
+    updateViewBox();
+
+    const observer = new ResizeObserver(updateViewBox);
+    observer.observe(svg);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const sceneRight = viewWidth - SCENE_RIGHT_GUTTER;
+  const sceneSpan = sceneRight - LENS_X;
+  const backgroundScaleX = viewWidth / BASE_VIEW_W;
   const distanceToX = (distanceInInches: number) => {
     const ratio = distanceInInches / visualSceneMaxInches;
     return LENS_X + clamp(ratio, 0, 1) * sceneSpan;
@@ -170,13 +210,13 @@ export default function PhotographyGraphic({
   const farIsOffscreen =
     farIsInfinite || farFocalPointInInches > visualSceneMaxInches;
   const farX = farIsOffscreen
-    ? SCENE_RIGHT
+    ? sceneRight
     : distanceToX(farFocalPointInInches);
   const dofCentreX = (nearX + farX) / 2;
-  const labelX = spreadFocusLabels(nearX, dofCentreX, farX);
+  const labelX = spreadFocusLabels(nearX, dofCentreX, farX, sceneRight);
 
   const halfFovRadians = (verticalFieldOfView / 2) * (Math.PI / 180);
-  const scenePixelWidth = SCENE_RIGHT - LENS_X;
+  const scenePixelWidth = sceneRight - LENS_X;
   const fovRiseAtSceneRight = Math.tan(halfFovRadians) * scenePixelWidth;
   const coneTopY = LENS_Y - fovRiseAtSceneRight;
   const coneBottomY = LENS_Y + fovRiseAtSceneRight;
@@ -207,6 +247,15 @@ export default function PhotographyGraphic({
         Math.max(0, farFocalPointInInches - nearFocalPointInInches),
         1
       );
+  const nearFarAxisCollision =
+    !farIsOffscreen && Math.abs(farX - nearX) < 68;
+  const axisLabelCollision =
+    Math.abs(subjectX - nearX) < 68 ||
+    (!farIsOffscreen && Math.abs(farX - subjectX) < 68);
+  const subjectAxisLabelY =
+    AXIS_Y + (axisLabelCollision && !nearFarAxisCollision ? 38 : 23);
+  const nearAxisLabelY = AXIS_Y + (nearFarAxisCollision ? 38 : 23);
+  const farAxisLabelY = AXIS_Y + (nearFarAxisCollision ? 38 : 23);
 
   const updateFromPointer = (evt: ReactPointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
@@ -220,8 +269,8 @@ export default function PhotographyGraphic({
     if (!matrix) return;
 
     const local = point.matrixTransform(matrix.inverse());
-    const x = clamp(local.x, LENS_X, SCENE_RIGHT);
-    const ratio = (x - LENS_X) / (SCENE_RIGHT - LENS_X);
+    const x = clamp(local.x, LENS_X, sceneRight);
+    const ratio = (x - LENS_X) / sceneSpan;
     onChangeDistance?.(ratio * visualSceneMaxInches);
   };
 
@@ -256,7 +305,8 @@ export default function PhotographyGraphic({
   return (
     <svg
       ref={svgRef}
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      data-testid="scene-svg"
+      viewBox={`0 0 ${viewWidth} ${VIEW_H}`}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label="Interactive depth of field scene"
@@ -272,49 +322,51 @@ export default function PhotographyGraphic({
           <rect
             x={LENS_X}
             y={SCENE_TOP}
-            width={SCENE_RIGHT - LENS_X}
+            width={sceneRight - LENS_X}
             height={GROUND_Y - SCENE_TOP}
             rx="2"
           />
         </clipPath>
       </defs>
 
-      <rect width={VIEW_W} height={VIEW_H} fill={dark ? "#101827" : "#FFFFFF"} />
+      <rect width={viewWidth} height={VIEW_H} fill={dark ? "#101827" : "#FFFFFF"} />
 
       <g clipPath={`url(#${sceneClipId})`}>
-        <path
-          d="M 0 323 C 130 280 230 285 340 318 C 470 358 595 303 720 320 C 850 338 925 300 1000 316 L 1000 360 L 0 360 Z"
-          fill={dark ? "#182235" : "#F5F8FC"}
-        />
-        <path
-          d="M 0 336 C 160 305 290 338 400 344 C 550 352 695 314 825 334 C 905 347 957 329 1000 326 L 1000 362 L 0 362 Z"
-          fill={dark ? "#1B263A" : "#F0F4F9"}
-        />
+        <g transform={`scale(${backgroundScaleX} 1)`}>
+          <path
+            d="M 0 323 C 130 280 230 285 340 318 C 470 358 595 303 720 320 C 850 338 925 300 1000 316 L 1000 360 L 0 360 Z"
+            fill={dark ? "#182235" : "#F5F8FC"}
+          />
+          <path
+            d="M 0 336 C 160 305 290 338 400 344 C 550 352 695 314 825 334 C 905 347 957 329 1000 326 L 1000 362 L 0 362 Z"
+            fill={dark ? "#1B263A" : "#F0F4F9"}
+          />
 
-        <g fill={dark ? "#26344A" : "#E9EFF6"} opacity="0.86">
-          <g transform="translate(190 282)">
-            <rect x="-3" y="30" width="6" height="27" rx="2" />
-            <circle cy="18" r="20" />
-            <circle cx="-13" cy="24" r="13" />
-            <circle cx="14" cy="24" r="14" />
-          </g>
-          <g transform="translate(300 294) scale(.82)">
-            <rect x="-3" y="30" width="6" height="27" rx="2" />
-            <circle cy="18" r="20" />
-            <circle cx="-13" cy="24" r="13" />
-            <circle cx="14" cy="24" r="14" />
-          </g>
-          <g transform="translate(892 282) scale(1.08)">
-            <rect x="-3" y="30" width="6" height="27" rx="2" />
-            <circle cy="18" r="20" />
-            <circle cx="-13" cy="24" r="13" />
-            <circle cx="14" cy="24" r="14" />
+          <g fill={dark ? "#26344A" : "#E9EFF6"} opacity="0.86">
+            <g transform="translate(190 282)">
+              <rect x="-3" y="30" width="6" height="27" rx="2" />
+              <circle cy="18" r="20" />
+              <circle cx="-13" cy="24" r="13" />
+              <circle cx="14" cy="24" r="14" />
+            </g>
+            <g transform="translate(300 294) scale(.82)">
+              <rect x="-3" y="30" width="6" height="27" rx="2" />
+              <circle cy="18" r="20" />
+              <circle cx="-13" cy="24" r="13" />
+              <circle cx="14" cy="24" r="14" />
+            </g>
+            <g transform="translate(892 282) scale(1.08)">
+              <rect x="-3" y="30" width="6" height="27" rx="2" />
+              <circle cy="18" r="20" />
+              <circle cx="-13" cy="24" r="13" />
+              <circle cx="14" cy="24" r="14" />
+            </g>
           </g>
         </g>
 
         <path
           data-testid="fov-cone"
-          d={`M ${LENS_X} ${LENS_Y} L ${SCENE_RIGHT} ${coneTopY} L ${SCENE_RIGHT} ${coneBottomY} Z`}
+          d={`M ${LENS_X} ${LENS_Y} L ${sceneRight} ${coneTopY} L ${sceneRight} ${coneBottomY} Z`}
           fill={dark ? "#334155" : "#D9DEE5"}
           opacity={dark ? 0.72 : 0.88}
         />
@@ -323,7 +375,7 @@ export default function PhotographyGraphic({
           data-testid="optical-axis"
           x1={LENS_X}
           y1={LENS_Y}
-          x2={SCENE_RIGHT}
+          x2={sceneRight}
           y2={LENS_Y}
           stroke={dark ? "#64748B" : "#94A3B8"}
           strokeWidth="1"
@@ -369,7 +421,7 @@ export default function PhotographyGraphic({
       ) : (
         <g data-testid="far-focus-offscreen">
           <path
-            d={`M ${SCENE_RIGHT - 12} ${SCENE_TOP + 18} L ${SCENE_RIGHT - 4} ${SCENE_TOP + 24} L ${SCENE_RIGHT - 12} ${SCENE_TOP + 30}`}
+            d={`M ${sceneRight - 12} ${SCENE_TOP + 18} L ${sceneRight - 4} ${SCENE_TOP + 24} L ${sceneRight - 12} ${SCENE_TOP + 30}`}
             fill="none"
             stroke="#E65E65"
             strokeWidth="1.5"
@@ -435,9 +487,9 @@ export default function PhotographyGraphic({
         {focalLength}mm&nbsp;&nbsp;f/{aperture.toFixed(1)}
       </text>
 
-      <line x1={LENS_X} y1={AXIS_Y} x2={SCENE_RIGHT} y2={AXIS_Y} stroke={dark ? "#52627A" : "#94A3B8"} strokeWidth="1" />
+      <line x1={LENS_X} y1={AXIS_Y} x2={sceneRight} y2={AXIS_Y} stroke={dark ? "#52627A" : "#94A3B8"} strokeWidth="1" />
 
-      {[LENS_X, nearX, subjectX, ...(!farIsOffscreen ? [farX] : []), SCENE_RIGHT].map((x, index) => (
+      {[LENS_X, nearX, subjectX, ...(!farIsOffscreen ? [farX] : []), sceneRight].map((x, index) => (
         <line
           key={`${x}-${index}`}
           x1={x}
@@ -451,12 +503,12 @@ export default function PhotographyGraphic({
 
       <g fill={dark ? "#AAB7CB" : "#5E6E86"} fontFamily="DM Sans Variable, DM Sans, ui-sans-serif, system-ui, sans-serif" fontSize="10.5" fontWeight="600">
         <text x={LENS_X} y={AXIS_Y + 23} textAnchor="start">{zeroLabel}</text>
-        <text x={nearX} y={AXIS_Y + 23} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
-        <text x={subjectX} y={AXIS_Y + 23} textAnchor="middle" fill={textFill} fontWeight="800">{convertUnits(distanceToSubjectInInches, 0)}</text>
+        <text x={nearX} y={nearAxisLabelY} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
+        <text x={subjectX} y={subjectAxisLabelY} textAnchor="middle" fill={textFill} fontWeight="800">{convertUnits(distanceToSubjectInInches, 0)}</text>
         {!farIsOffscreen ? (
-          <text x={farX} y={AXIS_Y + 23} textAnchor="middle">{convertUnits(farFocalPointInInches, 0)}</text>
+          <text x={farX} y={farAxisLabelY} textAnchor="middle">{convertUnits(farFocalPointInInches, 0)}</text>
         ) : null}
-        <text x={SCENE_RIGHT} y={AXIS_Y + 23} textAnchor="end">{sceneMaxLabel}</text>
+        <text x={sceneRight} y={AXIS_Y + 23} textAnchor="end">{sceneMaxLabel}</text>
       </g>
 
       <g data-testid="dof-bracket">

@@ -121,6 +121,16 @@ type SliderMark = {
   value: number;
 };
 
+const FOCAL_MARKS: SliderMark[] = [
+  { label: "3mm", value: 3 },
+  { label: "14mm", value: 14 },
+  { label: "28mm", value: 28 },
+  { label: "50mm", value: 50 },
+  { label: "85mm", value: 85 },
+  { label: "200mm", value: 200 },
+  { label: "400mm", value: 400 },
+];
+
 type SliderScale = "linear" | "log";
 
 const SLIDER_RESOLUTION = 1000;
@@ -270,7 +280,7 @@ function ParameterSlider({
       </SliderPrimitive.Root>
 
       <div className="relative mt-1.5 hidden h-4 text-[10.5px] font-medium text-secondary sm:block">
-        {marks.map((mark, markIndex) => {
+        {marks.map((mark) => {
           const position = discreteValues
             ? (findNearestIndex(mark.value, discreteValues) /
                 (discreteValues.length - 1)) *
@@ -282,17 +292,11 @@ function ParameterSlider({
               key={`${mark.label}-${mark.value}`}
               className={cn(
                 "absolute top-0 whitespace-nowrap",
-                position <= 2
+                position <= 1
                   ? "translate-x-0"
-                  : position >= 98
+                  : position >= 99
                     ? "-translate-x-full"
-                    : scale === "log" && markIndex === marks.length - 3
-                      ? "-translate-x-[80%]"
-                      : scale === "log" && markIndex === marks.length - 2
-                        ? "-translate-x-1/2"
-                      : scale === "log" && markIndex === marks.length - 1
-                        ? "-translate-x-[10%]"
-                        : "-translate-x-1/2"
+                    : "-translate-x-1/2"
               )}
               style={{ left: `${position}%` }}
             >
@@ -301,7 +305,7 @@ function ParameterSlider({
           );
         })}
       </div>
-      <p className="mt-2 text-pretty text-[11.5px] leading-[17px] text-secondary">{lesson}</p>
+      <p className="mt-2 text-[11.5px] leading-[17px] text-secondary xl:whitespace-nowrap">{lesson}</p>
       {note ? <p className="mt-1 text-[10.5px] font-semibold text-muted">{note}</p> : null}
     </section>
   );
@@ -399,7 +403,7 @@ function ShootingModeCard({
         <div className="min-w-0">
           <h2 className="text-balance text-[13px] font-extrabold text-ink">Shooting Mode</h2>
           <p className="mt-0.5 max-w-[300px] text-pretty text-[11.5px] leading-4 text-secondary">
-            Adjust the simulation for a single subject or a group/event scenario.
+            Choose a single-subject or group/event setup.
           </p>
         </div>
       </div>
@@ -434,7 +438,7 @@ function HelpCard({ onOpen }: { onOpen: () => void }) {
       <div className="min-w-0 flex-1">
         <h2 className="text-balance text-[14px] font-extrabold text-ink">How to use this tool</h2>
         <p className="mt-1 max-w-[650px] text-pretty text-[11.5px] leading-4 text-secondary">
-          Adjust the controls on the right to see how distance, focal length, aperture and sensor size affect your depth of field. The visualization and values update in real time.
+          Adjust the controls and watch the focus range update in real time.
         </p>
       </div>
       <button
@@ -517,26 +521,26 @@ function App() {
     {
       icon: faBullseye,
       label: "Near Focus",
-      description: "Closest acceptably sharp focus",
+      description: "Nearest sharp point",
       value: convert(near, 0),
     },
     {
       icon: faBullseye,
       label: "Far Focus",
-      description: "Furthest acceptably sharp focus",
+      description: "Farthest sharp point",
       value: farIsInfinite ? "∞" : convert(far, 0),
     },
     {
       icon: faArrowsLeftRight,
       label: "Depth of Field",
-      description: "Total in-focus range",
+      description: "Total sharp range",
       value: farIsInfinite ? "∞" : convert(depth, 0),
       primary: true,
     },
     {
       icon: faMountainSun,
       label: "Hyperfocal",
-      description: "Focus at this distance for maximum depth of field",
+      description: "Focus here for maximum DOF",
       value: convert(hyperfocal, 0),
     },
   ];
@@ -669,7 +673,7 @@ function App() {
               <div>
                 <h2 className="text-balance text-[17px] font-extrabold leading-5 text-ink">Camera &amp; Scene Settings</h2>
                 <p className="mt-1 text-pretty text-[11.5px] leading-4 text-secondary">
-                  Adjust the parameters below to see how they affect depth of field.
+                  Adjust settings to see their effect on depth of field.
                 </p>
               </div>
             </div>
@@ -710,7 +714,7 @@ function App() {
                 update={setDistance}
                 icon={faRulerCombined}
                 marks={distanceMarks}
-                lesson="Moving closer narrows depth of field; stepping back makes more of the scene appear sharp."
+                lesson="Closer subjects reduce DOF; greater distance increases it."
               />
 
               <ParameterSlider
@@ -724,15 +728,8 @@ function App() {
                 update={setFocalLength}
                 icon={faMagnifyingGlass}
                 scale="log"
-                marks={[
-                  { label: "14mm", value: 14 },
-                  { label: "28mm", value: 28 },
-                  { label: "50mm", value: 50 },
-                  { label: "85mm", value: 85 },
-                  { label: "135mm", value: 135 },
-                  { label: "200mm", value: 200 },
-                ]}
-                lesson="Longer lenses narrow the field of view and usually produce a shallower depth of field at the same camera-to-subject distance."
+                marks={FOCAL_MARKS}
+                lesson="Longer focal lengths narrow the view and reduce DOF."
                 note={sensor !== "35mm (full frame)" ? `${equivalent} mm full-frame equivalent` : undefined}
               />
 
@@ -755,7 +752,7 @@ function App() {
                   { label: "f/11", value: 11 },
                   { label: "f/22", value: 22 },
                 ]}
-                lesson="A smaller f-number opens the aperture and narrows depth of field; a larger f-number increases the range that appears acceptably sharp."
+                lesson="Lower f-numbers reduce DOF; higher f-numbers increase it."
               />
             </div>
 
@@ -825,7 +822,7 @@ function App() {
                   <FontAwesomeIcon icon={faCamera} className="h-[14px] w-[14px] text-signal" />
                   Quick Presets
                 </span>
-                <span className="text-right text-[10.5px] leading-4 text-muted">Popular combinations to get you started.</span>
+                <span className="text-right text-[10.5px] leading-4 text-muted">Common starting points.</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {PRESETS.map(([name, focal, fStop, targetDistance, presetSensor]) => {
