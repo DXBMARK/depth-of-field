@@ -74,12 +74,11 @@ const clamp = (value: number, min: number, max: number) =>
 
 const VIEW_W = 1000;
 const VIEW_H = 470;
-const SCENE_TOP = 82;
+const SCENE_TOP = 72;
 const GROUND_Y = 334;
 const LENS_X = 145;
 const LENS_Y = 188;
 const SCENE_RIGHT = 955;
-const AXIS_LEFT = 52;
 const AXIS_Y = 365;
 const BRACKET_Y = 420;
 
@@ -91,28 +90,28 @@ const PhotographerGraphic = () => (
 
 function spreadFocusLabels(nearAnchor: number, centreAnchor: number, farAnchor: number) {
   const minGap = 88;
-  const minX = 455;
-  const maxX = 885;
+  const minX = LENS_X + 48;
+  const maxX = SCENE_RIGHT - 48;
 
-  let near = nearAnchor;
-  let centre = centreAnchor;
-  let far = farAnchor;
+  let near = clamp(nearAnchor, minX, maxX);
+  let centre = clamp(centreAnchor, minX, maxX);
+  let far = clamp(farAnchor, minX, maxX);
 
   if (centre - near < minGap) near = centre - minGap;
   if (far - centre < minGap) far = centre + minGap;
 
   if (near < minX) {
-    const shift = minX - near;
-    near += shift;
-    centre += shift;
-    far += shift;
+    const delta = minX - near;
+    near += delta;
+    centre += delta;
+    far += delta;
   }
 
   if (far > maxX) {
-    const shift = far - maxX;
-    near -= shift;
-    centre -= shift;
-    far -= shift;
+    const delta = far - maxX;
+    near -= delta;
+    centre -= delta;
+    far -= delta;
   }
 
   return { near, centre, far };
@@ -159,22 +158,28 @@ export default function PhotographyGraphic({
   const subjectSourceHeight = SUBJECTS[subject].height;
   const textFill = textColor ?? "#0B1736";
 
+  const sceneSpan = SCENE_RIGHT - LENS_X;
   const distanceToX = (distanceInInches: number) => {
-    const t = clamp(distanceInInches, 0, visualSceneMaxInches) / visualSceneMaxInches;
-    return LENS_X + t * (SCENE_RIGHT - LENS_X);
+    const ratio = distanceInInches / visualSceneMaxInches;
+    return LENS_X + clamp(ratio, 0, 1) * sceneSpan;
   };
 
   const subjectX = distanceToX(distanceToSubjectInInches);
   const nearX = distanceToX(nearFocalPointInInches);
-  const farX = distanceToX(farFocalPointInInches);
+  const farIsInfinite = !Number.isFinite(farFocalPointInInches);
+  const farIsOffscreen =
+    farIsInfinite || farFocalPointInInches > visualSceneMaxInches;
+  const farX = farIsOffscreen
+    ? SCENE_RIGHT
+    : distanceToX(farFocalPointInInches);
   const dofCentreX = (nearX + farX) / 2;
   const labelX = spreadFocusLabels(nearX, dofCentreX, farX);
 
-  const halfFov = (verticalFieldOfView / 2) * (Math.PI / 180);
-  const sceneWidth = SCENE_RIGHT - LENS_X;
-  const visualRise = clamp(Math.tan(halfFov) * sceneWidth * 0.52, 72, 118);
-  const coneTopY = clamp(LENS_Y - visualRise, SCENE_TOP, LENS_Y - 26);
-  const coneBottomY = clamp(LENS_Y + visualRise, LENS_Y + 40, GROUND_Y - 8);
+  const halfFovRadians = (verticalFieldOfView / 2) * (Math.PI / 180);
+  const scenePixelWidth = SCENE_RIGHT - LENS_X;
+  const fovRiseAtSceneRight = Math.tan(halfFovRadians) * scenePixelWidth;
+  const coneTopY = LENS_Y - fovRiseAtSceneRight;
+  const coneBottomY = LENS_Y + fovRiseAtSceneRight;
 
   const desiredSubjectHeight =
     subject === "Human"
@@ -189,10 +194,19 @@ export default function PhotographyGraphic({
   const subjectScale = desiredSubjectHeight / subjectSourceHeight;
   const subjectTranslateY = GROUND_Y - desiredSubjectHeight - 2;
 
-  const sceneMaxLabel =
-    system === "Metric"
-      ? "1000 cm"
-      : formatAxisValue(system, visualSceneMaxInches, 0);
+  const sceneMaxLabel = formatAxisValue(system, visualSceneMaxInches, 0);
+  const zeroLabel = formatAxisValue(system, 0, 0);
+  const farLabel = farIsInfinite
+    ? "∞"
+    : farIsOffscreen
+      ? `${convertUnits(farFocalPointInInches, 1)} →`
+      : convertUnits(farFocalPointInInches, 0);
+  const depthLabel = farIsInfinite
+    ? "∞"
+    : convertUnits(
+        Math.max(0, farFocalPointInInches - nearFocalPointInInches),
+        1
+      );
 
   const updateFromPointer = (evt: ReactPointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current;
@@ -299,12 +313,27 @@ export default function PhotographyGraphic({
         </g>
 
         <path
+          data-testid="fov-cone"
           d={`M ${LENS_X} ${LENS_Y} L ${SCENE_RIGHT} ${coneTopY} L ${SCENE_RIGHT} ${coneBottomY} Z`}
           fill={dark ? "#334155" : "#D9DEE5"}
-          opacity={dark ? 0.72 : 0.9}
+          opacity={dark ? 0.72 : 0.88}
+        />
+
+        <line
+          data-testid="optical-axis"
+          x1={LENS_X}
+          y1={LENS_Y}
+          x2={SCENE_RIGHT}
+          y2={LENS_Y}
+          stroke={dark ? "#64748B" : "#94A3B8"}
+          strokeWidth="1"
+          strokeDasharray="5 6"
+          opacity="0.35"
+          vectorEffect="non-scaling-stroke"
         />
 
         <rect
+          data-testid="dof-zone"
           x={nearX}
           y={SCENE_TOP}
           width={Math.max(0, farX - nearX)}
@@ -315,6 +344,7 @@ export default function PhotographyGraphic({
       </g>
 
       <line
+        data-testid="near-focus-line"
         x1={nearX}
         y1={SCENE_TOP}
         x2={nearX}
@@ -324,17 +354,31 @@ export default function PhotographyGraphic({
         strokeDasharray="4 4"
         vectorEffect="non-scaling-stroke"
       />
+      {!farIsOffscreen ? (
+        <line
+          data-testid="far-focus-line"
+          x1={farX}
+          y1={SCENE_TOP}
+          x2={farX}
+          y2={GROUND_Y + 2}
+          stroke="#E65E65"
+          strokeWidth="1.25"
+          strokeDasharray="4 4"
+          vectorEffect="non-scaling-stroke"
+        />
+      ) : (
+        <g data-testid="far-focus-offscreen">
+          <path
+            d={`M ${SCENE_RIGHT - 12} ${SCENE_TOP + 18} L ${SCENE_RIGHT - 4} ${SCENE_TOP + 24} L ${SCENE_RIGHT - 12} ${SCENE_TOP + 30}`}
+            fill="none"
+            stroke="#E65E65"
+            strokeWidth="1.5"
+            vectorEffect="non-scaling-stroke"
+          />
+        </g>
+      )}
       <line
-        x1={farX}
-        y1={SCENE_TOP}
-        x2={farX}
-        y2={GROUND_Y + 2}
-        stroke="#E65E65"
-        strokeWidth="1.25"
-        strokeDasharray="4 4"
-        vectorEffect="non-scaling-stroke"
-      />
-      <line
+        data-testid="subject-focus-plane"
         x1={subjectX}
         y1={SCENE_TOP + 4}
         x2={subjectX}
@@ -355,13 +399,14 @@ export default function PhotographyGraphic({
         <text x={labelX.near} y="53" fill={textFill} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
 
         <text x={labelX.centre} y="37" fill="#E24F58" textAnchor="middle">Depth of field</text>
-        <text x={labelX.centre} y="53" fill="#E24F58" textAnchor="middle">{convertUnits(Math.max(0, farFocalPointInInches - nearFocalPointInInches), 0)}</text>
+        <text x={labelX.centre} y="53" fill="#E24F58" textAnchor="middle">{depthLabel}</text>
 
         <text x={labelX.far} y="37" fill={textFill} textAnchor="middle">Far focus</text>
-        <text x={labelX.far} y="53" fill={textFill} textAnchor="middle">{convertUnits(farFocalPointInInches, 0)}</text>
+        <text x={labelX.far} y="53" fill={textFill} textAnchor="middle">{farLabel}</text>
       </g>
 
       <g
+        data-testid="scene-photographer"
         fill={dark ? "#DCE7F5" : "#17213A"}
         transform="translate(135 138) scale(2.9)"
       >
@@ -371,6 +416,8 @@ export default function PhotographyGraphic({
       </g>
 
       <g
+        data-testid="scene-subject"
+        data-distance-inches={distanceToSubjectInInches}
         fill={dark ? "#E6BFC2" : "#4A171A"}
         transform={`translate(${subjectX} ${subjectTranslateY}) scale(${subjectScale})`}
       >
@@ -388,9 +435,9 @@ export default function PhotographyGraphic({
         {focalLength}mm&nbsp;&nbsp;f/{aperture.toFixed(1)}
       </text>
 
-      <line x1={AXIS_LEFT} y1={AXIS_Y} x2={SCENE_RIGHT} y2={AXIS_Y} stroke={dark ? "#52627A" : "#94A3B8"} strokeWidth="1" />
+      <line x1={LENS_X} y1={AXIS_Y} x2={SCENE_RIGHT} y2={AXIS_Y} stroke={dark ? "#52627A" : "#94A3B8"} strokeWidth="1" />
 
-      {[AXIS_LEFT, nearX, subjectX, farX, SCENE_RIGHT].map((x, index) => (
+      {[LENS_X, nearX, subjectX, ...(!farIsOffscreen ? [farX] : []), SCENE_RIGHT].map((x, index) => (
         <line
           key={`${x}-${index}`}
           x1={x}
@@ -403,16 +450,30 @@ export default function PhotographyGraphic({
       ))}
 
       <g fill={dark ? "#AAB7CB" : "#5E6E86"} fontFamily="DM Sans Variable, DM Sans, ui-sans-serif, system-ui, sans-serif" fontSize="10.5" fontWeight="600">
-        <text x={AXIS_LEFT} y={AXIS_Y + 23} textAnchor="start">0 cm</text>
+        <text x={LENS_X} y={AXIS_Y + 23} textAnchor="start">{zeroLabel}</text>
         <text x={nearX} y={AXIS_Y + 23} textAnchor="middle">{convertUnits(nearFocalPointInInches, 0)}</text>
         <text x={subjectX} y={AXIS_Y + 23} textAnchor="middle" fill={textFill} fontWeight="800">{convertUnits(distanceToSubjectInInches, 0)}</text>
-        <text x={farX} y={AXIS_Y + 23} textAnchor="middle">{convertUnits(farFocalPointInInches, 0)}</text>
+        {!farIsOffscreen ? (
+          <text x={farX} y={AXIS_Y + 23} textAnchor="middle">{convertUnits(farFocalPointInInches, 0)}</text>
+        ) : null}
         <text x={SCENE_RIGHT} y={AXIS_Y + 23} textAnchor="end">{sceneMaxLabel}</text>
       </g>
 
-      <line x1={nearX} y1={BRACKET_Y} x2={farX} y2={BRACKET_Y} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
-      <line x1={nearX} y1={BRACKET_Y - 6} x2={nearX} y2={BRACKET_Y + 6} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
-      <line x1={farX} y1={BRACKET_Y - 6} x2={farX} y2={BRACKET_Y + 6} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
+      <g data-testid="dof-bracket">
+        <line x1={nearX} y1={BRACKET_Y} x2={farX} y2={BRACKET_Y} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
+        <line x1={nearX} y1={BRACKET_Y - 6} x2={nearX} y2={BRACKET_Y + 6} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
+        {farIsOffscreen ? (
+          <path
+            d={`M ${farX - 8} ${BRACKET_Y - 5} L ${farX} ${BRACKET_Y} L ${farX - 8} ${BRACKET_Y + 5}`}
+            fill="none"
+            stroke={dark ? "#DCE7F5" : "#334155"}
+            strokeWidth="1.25"
+            vectorEffect="non-scaling-stroke"
+          />
+        ) : (
+          <line x1={farX} y1={BRACKET_Y - 6} x2={farX} y2={BRACKET_Y + 6} stroke={dark ? "#DCE7F5" : "#334155"} strokeWidth="1" />
+        )}
+      </g>
       <text
         x={dofCentreX}
         y={BRACKET_Y + 25}
@@ -422,7 +483,7 @@ export default function PhotographyGraphic({
         fontSize="11"
         fontWeight="800"
       >
-        {convertUnits(Math.max(0, farFocalPointInInches - nearFocalPointInInches), 1)}
+        {depthLabel}
       </text>
     </svg>
   );

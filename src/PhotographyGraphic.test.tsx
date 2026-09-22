@@ -25,5 +25,10 @@ test("renders the normalized accessible scene with focus labels", () => {
   assert.match(markup, /Near focus/i);
   assert.match(markup, /Depth of field/i);
   assert.match(markup, /Far focus/i);
+  assert.match(markup, /data-testid="fov-cone"/i);
+  assert.match(markup, /data-testid="optical-axis"/i);
+  assert.match(markup, /data-testid="scene-subject"/i);
+  assert.match(markup, /data-testid="near-focus-line"/i);
+  assert.match(markup, /data-testid="dof-zone"/i);
   assert.doesNotMatch(markup, /preserveAspectRatio="none"/i);
 });

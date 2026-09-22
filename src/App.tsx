@@ -22,11 +22,11 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import PhotographyGraphic, { SUBJECTS } from "./PhotographyGraphic";
 import { toImperial, toMetric } from "./utils/units";
 import { cn } from "./utils/cn";
+import { calculateOptics } from "./utils/optics";
 
 const DEFAULT_DISTANCE_INCHES = 612.1 / 2.54;
-const DEFAULT_DISTANCE_MAX_INCHES = 400;
-const METRIC_VISUAL_SCENE_MAX_INCHES = 1000 / 2.54;
-const IMPERIAL_VISUAL_SCENE_MAX_INCHES = 360;
+const BASE_SCENE_MAX_INCHES = 1000 / 2.54;
+const DEFAULT_DISTANCE_MAX_INCHES = BASE_SCENE_MAX_INCHES;
 
 const CIRCLES: Record<string, { coc: number; height: number; crop: number }> = {
   Webcam: { coc: 0.002, height: 3.6, crop: 9.6 },
@@ -48,6 +48,39 @@ const PRESETS = [
   ["FF 70mm", 70, 2.8, 96, "35mm (full frame)"],
   ["6x6 80mm", 80, 2.8, 90, "6x6 (Medium Format)"],
   ["6x7 80mm", 80, 2.8, 80, "6x7 (Medium Format)"],
+] as const;
+
+const APERTURE_STOPS = [
+  0.8,
+  0.9,
+  1.0,
+  1.1,
+  1.2,
+  1.4,
+  1.6,
+  1.8,
+  2.0,
+  2.2,
+  2.5,
+  2.8,
+  3.2,
+  3.5,
+  4.0,
+  4.5,
+  5.0,
+  5.6,
+  6.3,
+  7.1,
+  8.0,
+  9.0,
+  10,
+  11,
+  13,
+  14,
+  16,
+  18,
+  20,
+  22,
 ] as const;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -88,54 +121,14 @@ type SliderMark = {
   value: number;
 };
 
-type SliderScale = "linear" | "log" | "focal";
+type SliderScale = "linear" | "log";
 
 const SLIDER_RESOLUTION = 1000;
-const FOCAL_SCALE_POINTS = [
-  { value: 3, position: 0 },
-  { value: 14, position: 0.12 },
-  { value: 28, position: 0.29 },
-  { value: 50, position: 0.45 },
-  { value: 85, position: 0.62 },
-  { value: 135, position: 0.78 },
-  { value: 200, position: 0.9 },
-  { value: 400, position: 1 },
-] as const;
-
-function focalValueToPosition(value: number) {
-  for (let index = 1; index < FOCAL_SCALE_POINTS.length; index += 1) {
-    const previous = FOCAL_SCALE_POINTS[index - 1];
-    const current = FOCAL_SCALE_POINTS[index];
-
-    if (value <= current.value) {
-      const progress = (value - previous.value) / (current.value - previous.value);
-      return previous.position + progress * (current.position - previous.position);
-    }
-  }
-
-  return 1;
-}
-
-function focalPositionToValue(position: number) {
-  for (let index = 1; index < FOCAL_SCALE_POINTS.length; index += 1) {
-    const previous = FOCAL_SCALE_POINTS[index - 1];
-    const current = FOCAL_SCALE_POINTS[index];
-
-    if (position <= current.position) {
-      const progress = (position - previous.position) / (current.position - previous.position);
-      return previous.value + progress * (current.value - previous.value);
-    }
-  }
-
-  return FOCAL_SCALE_POINTS[FOCAL_SCALE_POINTS.length - 1].value;
-}
 
 function valueToSliderPosition(value: number, min: number, max: number, scale: SliderScale) {
-  const normalized = scale === "focal"
-    ? focalValueToPosition(value)
-    : scale === "log"
-      ? Math.log(value / min) / Math.log(max / min)
-      : (value - min) / (max - min);
+  const normalized = scale === "log"
+    ? Math.log(value / min) / Math.log(max / min)
+    : (value - min) / (max - min);
 
   return clamp(normalized * SLIDER_RESOLUTION, 0, SLIDER_RESOLUTION);
 }
@@ -148,14 +141,28 @@ function sliderPositionToValue(
   scale: SliderScale
 ) {
   const normalized = clamp(position / SLIDER_RESOLUTION, 0, 1);
-  const raw = scale === "focal"
-    ? focalPositionToValue(normalized)
-    : scale === "log"
-      ? min * Math.pow(max / min, normalized)
-      : min + (max - min) * normalized;
+  const raw = scale === "log"
+    ? min * Math.pow(max / min, normalized)
+    : min + (max - min) * normalized;
   const stepped = min + Math.round((raw - min) / step) * step;
 
   return clamp(Number(stepped.toFixed(6)), min, max);
+}
+
+function findNearestIndex(value: number, values: readonly number[]) {
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  values.forEach((candidate, index) => {
+    const distance = Math.abs(candidate - value);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
 }
 
 type ParameterSliderProps = {
@@ -170,6 +177,7 @@ type ParameterSliderProps = {
   marks: SliderMark[];
   lesson: string;
   scale?: SliderScale;
+  values?: readonly number[];
   icon?: IconDefinition;
   customIcon?: ReactNode;
   note?: string;
@@ -187,10 +195,19 @@ function ParameterSlider({
   marks,
   lesson,
   scale = "linear",
+  values,
   icon,
   customIcon,
   note,
 }: ParameterSliderProps) {
+  const discreteValues = values && values.length > 1 ? values : undefined;
+  const sliderValue = discreteValues
+    ? findNearestIndex(value, discreteValues)
+    : valueToSliderPosition(value, min, max, scale);
+  const sliderMax = discreteValues
+    ? discreteValues.length - 1
+    : SLIDER_RESOLUTION;
+
   return (
     <section className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-soft xl:py-3">
       <div className="mb-2.5 flex items-center justify-between gap-3">
@@ -203,21 +220,43 @@ function ParameterSlider({
           </span>
           {label}
         </span>
-        <output className="rounded-md bg-signal-soft px-2.5 py-1 text-[13px] font-extrabold tabular-nums text-signal">
+        <output
+          data-testid={`${id}-value`}
+          className="rounded-md bg-signal-soft px-2.5 py-1 text-[13px] font-extrabold tabular-nums text-signal"
+        >
           {valueLabel}
         </output>
       </div>
 
       <SliderPrimitive.Root
-        value={valueToSliderPosition(value, min, max, scale)}
+        value={sliderValue}
         min={0}
-        max={SLIDER_RESOLUTION}
+        max={sliderMax}
         step={1}
-        largeStep={20}
+        largeStep={discreteValues ? 3 : 20}
         thumbAlignment="edge"
-        onValueChange={(position) => update(sliderPositionToValue(position, min, max, step, scale))}
+        onValueChange={(position) => {
+          if (discreteValues) {
+            const index = clamp(
+              Math.round(position),
+              0,
+              discreteValues.length - 1
+            );
+            update(discreteValues[index]);
+            return;
+          }
+
+          const nextValue = sliderPositionToValue(position, min, max, step, scale);
+
+          if (nextValue === value && position !== sliderValue) {
+            update(clamp(value + Math.sign(position - sliderValue) * step, min, max));
+            return;
+          }
+
+          update(nextValue);
+        }}
         aria-labelledby={`${id}-label`}
-        className="relative flex h-8 w-full touch-none select-none items-center"
+        className="relative flex h-11 w-full touch-none select-none items-center sm:h-8"
       >
         <SliderPrimitive.Control className="relative h-full w-full cursor-pointer touch-none">
           <SliderPrimitive.Track className="absolute top-1/2 h-[6px] w-full -translate-y-1/2 rounded-full bg-[#DCE4EF] dark:bg-slate-700">
@@ -230,16 +269,30 @@ function ParameterSlider({
         </SliderPrimitive.Control>
       </SliderPrimitive.Root>
 
-      <div className="relative mt-1.5 hidden h-4 text-[11px] font-medium text-secondary sm:block">
-        {marks.map((mark) => {
-          const position = valueToSliderPosition(mark.value, min, max, scale) / 10;
+      <div className="relative mt-1.5 hidden h-4 text-[10.5px] font-medium text-secondary sm:block">
+        {marks.map((mark, markIndex) => {
+          const position = discreteValues
+            ? (findNearestIndex(mark.value, discreteValues) /
+                (discreteValues.length - 1)) *
+              100
+            : valueToSliderPosition(mark.value, min, max, scale) / 10;
 
           return (
             <span
               key={`${mark.label}-${mark.value}`}
               className={cn(
                 "absolute top-0 whitespace-nowrap",
-                position <= 2 ? "translate-x-0" : position >= 98 ? "-translate-x-full" : "-translate-x-1/2"
+                position <= 2
+                  ? "translate-x-0"
+                  : position >= 98
+                    ? "-translate-x-full"
+                    : scale === "log" && markIndex === marks.length - 3
+                      ? "-translate-x-[80%]"
+                      : scale === "log" && markIndex === marks.length - 2
+                        ? "-translate-x-1/2"
+                      : scale === "log" && markIndex === marks.length - 1
+                        ? "-translate-x-[10%]"
+                        : "-translate-x-1/2"
               )}
               style={{ left: `${position}%` }}
             >
@@ -312,7 +365,7 @@ function RadioChoice({
   onChange: () => void;
 }) {
   return (
-    <label className="flex min-h-10 cursor-pointer items-center gap-2.5 text-[12px] font-bold text-ink">
+    <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[12px] font-bold text-ink sm:min-h-10">
       <input
         type="radio"
         checked={checked}
@@ -416,29 +469,24 @@ function App() {
   const coc = custom ? diagonal / 1500 : CIRCLES[sensor].coc;
   const sensorHeight = custom ? customHeight : CIRCLES[sensor].height;
   const crop = custom ? 43.27 / diagonal : CIRCLES[sensor].crop;
-  const subjectDistanceMM = distance * 25.4;
-  const hyperfocalMM = focalLength + focalLength ** 2 / (aperture * coc);
-  const farMM =
-    (hyperfocalMM * subjectDistanceMM) /
-    (hyperfocalMM - (subjectDistanceMM - focalLength));
-  const nearMM =
-    (hyperfocalMM * subjectDistanceMM) /
-    (hyperfocalMM + (subjectDistanceMM - focalLength));
-
-  const calculationSceneLimit = 360;
-  const near = clamp(nearMM / 25.4, 0, calculationSceneLimit);
-  let far = clamp(farMM / 25.4, 0, calculationSceneLimit);
-  if (far < near) far = calculationSceneLimit;
-  const hyperfocal = hyperfocalMM / 25.4;
-  const infinity = farMM / 25.4 > calculationSceneLimit || farMM <= 0;
-  const depth = far - near;
-  const fov = (2 * Math.atan(sensorHeight / 2 / focalLength) * 180) / Math.PI;
+  const optics = calculateOptics({
+    focalLengthMm: focalLength,
+    aperture,
+    circleOfConfusionMm: coc,
+    subjectDistanceInches: distance,
+    sensorHeightMm: sensorHeight,
+  });
+  const {
+    nearInches: near,
+    farInches: far,
+    depthOfFieldInches: depth,
+    hyperfocalInches: hyperfocal,
+    farIsInfinite,
+    verticalFovDegrees: fov,
+  } = optics;
   const diffractionLimit = coc / 0.001342;
   const equivalent = Math.round(focalLength * crop);
-  const visualSceneMax =
-    system === "Metric"
-      ? METRIC_VISUAL_SCENE_MAX_INCHES
-      : IMPERIAL_VISUAL_SCENE_MAX_INCHES;
+  const visualSceneMax = Math.max(BASE_SCENE_MAX_INCHES, distanceMax);
 
   const distanceMarks = useMemo(() => {
     if (distanceMax <= DEFAULT_DISTANCE_MAX_INCHES) {
@@ -476,13 +524,13 @@ function App() {
       icon: faBullseye,
       label: "Far Focus",
       description: "Furthest acceptably sharp focus",
-      value: infinity ? "∞" : convert(far, 0),
+      value: farIsInfinite ? "∞" : convert(far, 0),
     },
     {
       icon: faArrowsLeftRight,
       label: "Depth of Field",
       description: "Total in-focus range",
-      value: infinity ? "∞" : convert(depth, 0),
+      value: farIsInfinite ? "∞" : convert(depth, 0),
       primary: true,
     },
     {
@@ -501,7 +549,7 @@ function App() {
   )?.[0];
 
   const selectClass =
-    "h-10 w-full rounded-md border border-[#CDD9E8] bg-white px-3 text-[12px] font-semibold text-ink outline-none transition focus:border-signal focus:ring-4 focus:ring-signal/15 dark:bg-slate-900";
+    "h-11 w-full rounded-md border border-[#CDD9E8] bg-white px-3 text-[12px] font-semibold text-ink outline-none transition focus:border-signal focus:ring-4 focus:ring-signal/15 sm:h-10 dark:bg-slate-900";
 
   const handleSetHyperfocal = () => {
     const target = Math.max(10, hyperfocal);
@@ -527,7 +575,7 @@ function App() {
       className={cn("min-h-screen bg-canvas text-ink", dark && "dark")}
       data-testid="app-shell"
     >
-      <div className="mx-auto w-full max-w-[1448px] px-5 pb-1 pt-6 md:px-8 xl:px-9 xl:pt-7">
+      <div className="mx-auto w-full max-w-[1640px] px-4 pb-2 pt-5 md:px-5 xl:px-6">
         <header className="mb-5 flex items-start justify-between px-0 sm:px-3">
           <div>
             <p className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.20em] text-signal">
@@ -552,14 +600,14 @@ function App() {
               aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
               title={dark ? "Switch to light mode" : "Switch to dark mode"}
               onClick={() => setDark(!dark)}
-              className="grid size-10 place-items-center rounded-md border border-line bg-surface text-[#334155] shadow-sm transition hover:border-signal/40 hover:text-signal focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20"
+              className="grid size-11 place-items-center rounded-md border border-line bg-surface text-[#334155] shadow-sm transition hover:border-signal/40 hover:text-signal focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 sm:size-10"
             >
               <FontAwesomeIcon icon={dark ? faSun : faMoon} className="size-[18px]" />
             </button>
           </div>
         </header>
 
-        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.72fr)_minmax(460px,0.98fr)]">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(440px,500px)]">
           <section className="min-w-0">
             <div
               data-testid="simulator-card"
@@ -593,8 +641,9 @@ function App() {
                   textColor={dark ? "#F5F7FB" : "#0B1736"}
                   dark={dark}
                   onChangeDistance={(value) => {
-                    setDistance(value);
-                    if (value > distanceMax) setDistanceMax(Math.ceil(value));
+                    const nextDistance = Math.max(10, value);
+                    setDistance(nextDistance);
+                    if (nextDistance > distanceMax) setDistanceMax(Math.ceil(nextDistance));
                   }}
                 />
               </div>
@@ -637,7 +686,7 @@ function App() {
                     type="button"
                     aria-pressed={system === item}
                     onClick={() => setSystem(item)}
-                    className={`h-9 rounded-[6px] px-3 text-[12px] font-extrabold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 ${
+                    className={`h-11 rounded-[6px] px-3 text-[12px] font-extrabold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 sm:h-9 ${
                       system === item
                         ? "bg-signal text-white shadow-[0_2px_6px_rgba(20,110,245,0.25)]"
                         : "text-secondary hover:text-ink"
@@ -674,7 +723,7 @@ function App() {
                 step={1}
                 update={setFocalLength}
                 icon={faMagnifyingGlass}
-                scale="focal"
+                scale="log"
                 marks={[
                   { label: "14mm", value: 14 },
                   { label: "28mm", value: 28 },
@@ -683,21 +732,21 @@ function App() {
                   { label: "135mm", value: 135 },
                   { label: "200mm", value: 200 },
                 ]}
-                lesson="Longer lenses compress the scene and make the focused zone shallower at the same distance."
+                lesson="Longer lenses narrow the field of view and usually produce a shallower depth of field at the same camera-to-subject distance."
                 note={sensor !== "35mm (full frame)" ? `${equivalent} mm full-frame equivalent` : undefined}
               />
 
               <ParameterSlider
                 id="aperture"
                 label="Aperture"
-                valueLabel={`f/${aperture.toFixed(1)}`}
+                valueLabel={`f/${aperture}`}
                 value={aperture}
                 min={0.8}
                 max={22}
                 step={0.1}
+                values={APERTURE_STOPS}
                 update={setAperture}
                 customIcon={<ApertureIcon />}
-                scale="log"
                 marks={[
                   { label: "f/0.8", value: 0.8 },
                   { label: "f/1.4", value: 1.4 },
@@ -706,7 +755,7 @@ function App() {
                   { label: "f/11", value: 11 },
                   { label: "f/22", value: 22 },
                 ]}
-                lesson="A smaller f-number opens the aperture and isolates the subject; a larger f-number increases sharpness through the scene."
+                lesson="A smaller f-number opens the aperture and narrows depth of field; a larger f-number increases the range that appears acceptably sharp."
               />
             </div>
 
@@ -752,7 +801,7 @@ function App() {
                       min="1"
                       value={customWidth}
                       onChange={(event) => setCustomWidth(Math.max(1, Number(event.target.value)))}
-                      className="mt-1.5 h-9 w-full rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-ink outline-none focus:border-signal focus:ring-4 focus:ring-signal/15"
+                      className="mt-1.5 h-11 w-full rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-ink outline-none focus:border-signal focus:ring-4 focus:ring-signal/15 sm:h-9"
                     />
                   </label>
                   <label className="text-[11px] font-bold text-secondary">
@@ -763,7 +812,7 @@ function App() {
                       min="1"
                       value={customHeight}
                       onChange={(event) => setCustomHeight(Math.max(1, Number(event.target.value)))}
-                      className="mt-1.5 h-9 w-full rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-ink outline-none focus:border-signal focus:ring-4 focus:ring-signal/15"
+                      className="mt-1.5 h-11 w-full rounded-md border border-line bg-white px-2 text-[12px] font-semibold text-ink outline-none focus:border-signal focus:ring-4 focus:ring-signal/15 sm:h-9"
                     />
                   </label>
                 </div>
@@ -788,7 +837,7 @@ function App() {
                       aria-pressed={active}
                       onClick={() => applyPreset(focal, fStop, targetDistance, presetSensor)}
                       className={cn(
-                        "h-9 rounded-md border px-3 text-[11px] font-extrabold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 xl:h-[34px]",
+                        "h-11 rounded-md border px-3 text-[11px] font-extrabold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 sm:h-9 xl:h-[34px]",
                         active
                           ? "border-signal bg-signal-soft text-signal"
                           : "border-line bg-white text-ink hover:border-signal/40 hover:bg-signal-soft/50 hover:text-signal"
@@ -859,7 +908,7 @@ function App() {
                 ref={closeButtonRef}
                 type="button"
                 onClick={() => setHelpOpen(false)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-white text-lg font-bold text-secondary hover:text-ink"
+                className="grid size-11 shrink-0 place-items-center rounded-md border border-line bg-white text-lg font-bold text-secondary hover:text-ink sm:size-9"
                 aria-label="Close help"
               >
                 ×

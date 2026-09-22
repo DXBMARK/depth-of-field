@@ -90,13 +90,19 @@
 
 @layer components {
   .dof-scene-frame {
-    aspect-ratio: 1000 / 470;
+    height: clamp(330px, 34vh, 382px);
   }
 }
 
 @media (min-width: 1280px) and (max-height: 900px) {
   .dof-scene-frame {
-    aspect-ratio: auto;
-    height: 310px;
+    height: 300px;
+  }
+}
+
+@media (max-width: 767px) {
+  .dof-scene-frame {
+    aspect-ratio: 1000 / 470;
+    height: auto;
   }
 }
