@@ -21,6 +21,7 @@ import { FiGithub } from "react-icons/fi";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import PhotographyGraphic, { SUBJECTS } from "./PhotographyGraphic";
 import { toImperial, toMetric } from "./utils/units";
+import { cn } from "./utils/cn";
 
 const DEFAULT_DISTANCE_INCHES = 612.1 / 2.54;
 const DEFAULT_DISTANCE_MAX_INCHES = 400;
@@ -68,10 +69,93 @@ function ApertureIcon({ className = "h-[18px] w-[18px]" }: { className?: string 
 
 function SectionIcon({ icon }: { icon: IconDefinition }) {
   return (
-    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-signal-soft text-signal">
-      <FontAwesomeIcon icon={icon} className="h-[17px] w-[17px]" />
+    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-signal-soft text-signal">
+      <FontAwesomeIcon icon={icon} className="size-[17px]" />
     </span>
   );
+}
+
+function PanelTitleIcon({ icon }: { icon: IconDefinition }) {
+  return (
+    <span className="grid size-8 shrink-0 place-items-center rounded-md bg-signal text-white shadow-sm">
+      <FontAwesomeIcon icon={icon} className="size-4" />
+    </span>
+  );
+}
+
+type SliderMark = {
+  label: string;
+  value: number;
+};
+
+type SliderScale = "linear" | "log" | "focal";
+
+const SLIDER_RESOLUTION = 1000;
+const FOCAL_SCALE_POINTS = [
+  { value: 3, position: 0 },
+  { value: 14, position: 0.12 },
+  { value: 28, position: 0.29 },
+  { value: 50, position: 0.45 },
+  { value: 85, position: 0.62 },
+  { value: 135, position: 0.78 },
+  { value: 200, position: 0.9 },
+  { value: 400, position: 1 },
+] as const;
+
+function focalValueToPosition(value: number) {
+  for (let index = 1; index < FOCAL_SCALE_POINTS.length; index += 1) {
+    const previous = FOCAL_SCALE_POINTS[index - 1];
+    const current = FOCAL_SCALE_POINTS[index];
+
+    if (value <= current.value) {
+      const progress = (value - previous.value) / (current.value - previous.value);
+      return previous.position + progress * (current.position - previous.position);
+    }
+  }
+
+  return 1;
+}
+
+function focalPositionToValue(position: number) {
+  for (let index = 1; index < FOCAL_SCALE_POINTS.length; index += 1) {
+    const previous = FOCAL_SCALE_POINTS[index - 1];
+    const current = FOCAL_SCALE_POINTS[index];
+
+    if (position <= current.position) {
+      const progress = (position - previous.position) / (current.position - previous.position);
+      return previous.value + progress * (current.value - previous.value);
+    }
+  }
+
+  return FOCAL_SCALE_POINTS[FOCAL_SCALE_POINTS.length - 1].value;
+}
+
+function valueToSliderPosition(value: number, min: number, max: number, scale: SliderScale) {
+  const normalized = scale === "focal"
+    ? focalValueToPosition(value)
+    : scale === "log"
+      ? Math.log(value / min) / Math.log(max / min)
+      : (value - min) / (max - min);
+
+  return clamp(normalized * SLIDER_RESOLUTION, 0, SLIDER_RESOLUTION);
+}
+
+function sliderPositionToValue(
+  position: number,
+  min: number,
+  max: number,
+  step: number,
+  scale: SliderScale
+) {
+  const normalized = clamp(position / SLIDER_RESOLUTION, 0, 1);
+  const raw = scale === "focal"
+    ? focalPositionToValue(normalized)
+    : scale === "log"
+      ? min * Math.pow(max / min, normalized)
+      : min + (max - min) * normalized;
+  const stepped = min + Math.round((raw - min) / step) * step;
+
+  return clamp(Number(stepped.toFixed(6)), min, max);
 }
 
 type ParameterSliderProps = {
@@ -83,8 +167,9 @@ type ParameterSliderProps = {
   max: number;
   step: number;
   update: (value: number) => void;
-  marks: string[];
+  marks: SliderMark[];
   lesson: string;
+  scale?: SliderScale;
   icon?: IconDefinition;
   customIcon?: ReactNode;
   note?: string;
@@ -101,12 +186,13 @@ function ParameterSlider({
   update,
   marks,
   lesson,
+  scale = "linear",
   icon,
   customIcon,
   note,
 }: ParameterSliderProps) {
   return (
-    <section className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-soft">
+    <section className="rounded-lg border border-line bg-surface px-4 py-3.5 shadow-soft xl:py-3">
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <span
           id={`${id}-label`}
@@ -123,13 +209,13 @@ function ParameterSlider({
       </div>
 
       <SliderPrimitive.Root
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        largeStep={Math.max(step * 10, 1)}
+        value={valueToSliderPosition(value, min, max, scale)}
+        min={0}
+        max={SLIDER_RESOLUTION}
+        step={1}
+        largeStep={20}
         thumbAlignment="edge"
-        onValueChange={update}
+        onValueChange={(position) => update(sliderPositionToValue(position, min, max, step, scale))}
         aria-labelledby={`${id}-label`}
         className="relative flex h-8 w-full touch-none select-none items-center"
       >
@@ -139,17 +225,30 @@ function ParameterSlider({
           </SliderPrimitive.Track>
           <SliderPrimitive.Thumb
             aria-label={label}
-            className="block h-[17px] w-[17px] rounded-full border-[3px] border-white bg-signal shadow-[0_1px_4px_rgba(15,23,42,0.28)] outline-none transition focus-visible:ring-4 focus-visible:ring-signal/20 dark:border-slate-950"
+            className="block size-[18px] rounded-full border-[3px] border-white bg-signal shadow-md outline-none transition focus-visible:ring-4 focus-visible:ring-signal/20 dark:border-slate-950"
           />
         </SliderPrimitive.Control>
       </SliderPrimitive.Root>
 
-      <div className="mt-1.5 hidden justify-between text-[10.5px] font-medium text-muted sm:flex">
-        {marks.map((mark) => (
-          <span key={mark}>{mark}</span>
-        ))}
+      <div className="relative mt-1.5 hidden h-4 text-[11px] font-medium text-secondary sm:block">
+        {marks.map((mark) => {
+          const position = valueToSliderPosition(mark.value, min, max, scale) / 10;
+
+          return (
+            <span
+              key={`${mark.label}-${mark.value}`}
+              className={cn(
+                "absolute top-0 whitespace-nowrap",
+                position <= 2 ? "translate-x-0" : position >= 98 ? "-translate-x-full" : "-translate-x-1/2"
+              )}
+              style={{ left: `${position}%` }}
+            >
+              {mark.label}
+            </span>
+          );
+        })}
       </div>
-      <p className="mt-2 text-[11px] leading-[16px] text-secondary">{lesson}</p>
+      <p className="mt-2 text-pretty text-[11.5px] leading-[17px] text-secondary">{lesson}</p>
       {note ? <p className="mt-1 text-[10.5px] font-semibold text-muted">{note}</p> : null}
     </section>
   );
@@ -164,33 +263,40 @@ type MetricCardProps = {
 };
 
 function MetricCard({ icon, label, description, value, primary }: MetricCardProps) {
+  const valueParts = value.match(/^(.+?)\s([^\s]+)$/);
+
   return (
     <article
-      className={`min-w-0 rounded-lg border p-4 shadow-soft ${
-        primary
-          ? "border-signal/35 bg-signal-soft/45"
-          : "border-line bg-surface"
-      }`}
+      className={cn(
+        "min-w-0 rounded-lg border p-3.5 shadow-soft sm:p-4",
+        primary ? "border-signal/35 bg-signal-soft/45" : "border-line bg-surface"
+      )}
     >
       <div className="flex items-start gap-3">
         <span
-          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${
+          className={cn(
+            "grid size-10 shrink-0 place-items-center rounded-full",
             primary ? "bg-[#DCEBFF] text-signal" : "bg-[#F0F5FB] text-signal"
-          }`}
+          )}
         >
           <FontAwesomeIcon icon={icon} className="h-[18px] w-[18px]" />
         </span>
         <div className="min-w-0">
-          <h3 className={`text-[13px] font-extrabold leading-5 ${primary ? "text-signal" : "text-ink"}`}>
+          <h3 className={cn("text-balance text-[13px] font-extrabold leading-5", primary ? "text-signal" : "text-ink")}>
             {label}
           </h3>
-          <p className="mt-0.5 min-h-[32px] text-[11px] leading-[15px] text-secondary">
+          <p className="mt-0.5 min-h-[32px] text-pretty text-[11.5px] leading-4 text-secondary">
             {description}
           </p>
         </div>
       </div>
-      <p className="mt-2.5 truncate text-[26px] font-extrabold leading-none tracking-tight tabular-nums text-ink">
-        {value}
+      <p className="mt-2.5 truncate text-[28px] font-extrabold leading-none tabular-nums text-ink">
+        {valueParts ? (
+          <>
+            {valueParts[1]}
+            <span className="ml-1 text-[19px] font-bold">{valueParts[2]}</span>
+          </>
+        ) : value}
       </p>
     </article>
   );
@@ -213,8 +319,8 @@ function RadioChoice({
         onChange={onChange}
         className="peer sr-only"
       />
-      <span className="grid h-[20px] w-[20px] place-items-center rounded-full border-2 border-[#B9C7D9] bg-white transition peer-checked:border-signal peer-focus-visible:ring-4 peer-focus-visible:ring-signal/20">
-        <span className={`h-[10px] w-[10px] rounded-full transition ${checked ? "bg-signal" : "bg-transparent"}`} />
+      <span className="grid size-5 place-items-center rounded-full border-2 border-[#B9C7D9] bg-white transition peer-checked:border-signal peer-focus-visible:ring-4 peer-focus-visible:ring-signal/20">
+        <span className={cn("size-2.5 rounded-full transition", checked ? "bg-signal" : "bg-transparent")} />
       </span>
       {label}
     </label>
@@ -233,29 +339,29 @@ function ShootingModeCard({
   return (
     <section
       data-testid="shooting-mode"
-      className="mt-5 grid min-h-[102px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-5 rounded-lg border border-[#D8E8FB] bg-[#F5F9FF] px-4 py-3.5 dark:border-blue-500/20 dark:bg-blue-500/10"
+      className="mt-5 grid min-h-[102px] grid-cols-1 items-center gap-4 rounded-lg border border-[#D8E8FB] bg-[#F5F9FF] px-4 py-4 dark:border-blue-500/20 dark:bg-blue-500/10 md:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:gap-5 xl:py-3.5"
     >
       <div className="flex min-w-0 items-center gap-4">
         <SectionIcon icon={faPeopleGroup} />
         <div className="min-w-0">
-          <h2 className="text-[13px] font-extrabold text-ink">Shooting Mode</h2>
-          <p className="mt-0.5 max-w-[300px] text-[11px] leading-[16px] text-secondary">
+          <h2 className="text-balance text-[13px] font-extrabold text-ink">Shooting Mode</h2>
+          <p className="mt-0.5 max-w-[300px] text-pretty text-[11.5px] leading-4 text-secondary">
             Adjust the simulation for a single subject or a group/event scenario.
           </p>
         </div>
       </div>
 
-      <fieldset className="flex items-center gap-5">
+      <fieldset className="grid w-full grid-cols-2 items-center gap-3 md:flex md:w-auto md:gap-5">
         <legend className="sr-only">Shooting mode</legend>
         <RadioChoice checked={mode === "Group / Event"} label="Group / Event" onChange={() => setMode("Group / Event")} />
         <RadioChoice checked={mode === "Single Subject"} label="Single Subject" onChange={() => setMode("Single Subject")} />
       </fieldset>
 
-      <div className="border-l border-[#D6E2F0] pl-5">
+      <div className="md:col-span-2 md:justify-self-end xl:col-span-1 xl:border-l xl:border-[#D6E2F0] xl:pl-5">
         <button
           type="button"
           onClick={onSetHyperfocal}
-          className="inline-flex h-[42px] items-center justify-center rounded-lg border border-[#BBD6FB] bg-white px-4 text-[12px] font-extrabold text-signal shadow-soft transition hover:border-signal/50 hover:bg-signal-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20"
+          className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-[#BBD6FB] bg-white px-4 text-[12px] font-extrabold text-signal shadow-soft transition hover:border-signal/50 hover:bg-signal-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 md:w-auto"
         >
           <FontAwesomeIcon icon={faBullseye} className="mr-2 h-[14px] w-[14px]" />
           Set hyperfocal
@@ -269,19 +375,19 @@ function HelpCard({ onOpen }: { onOpen: () => void }) {
   return (
     <section
       data-testid="help-card"
-      className="mt-4 flex min-h-[96px] items-center gap-4 rounded-lg border border-line bg-surface px-4 py-3.5 shadow-panel"
+      className="mt-4 grid min-h-[96px] grid-cols-[auto_minmax(0,1fr)] items-center gap-4 rounded-lg border border-line bg-surface px-4 py-4 shadow-panel sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:py-3.5"
     >
       <SectionIcon icon={faLightbulb} />
       <div className="min-w-0 flex-1">
-        <h2 className="text-[14px] font-extrabold text-ink">How to use this tool</h2>
-        <p className="mt-1 max-w-[650px] text-[11px] leading-[16px] text-secondary">
+        <h2 className="text-balance text-[14px] font-extrabold text-ink">How to use this tool</h2>
+        <p className="mt-1 max-w-[650px] text-pretty text-[11.5px] leading-4 text-secondary">
           Adjust the controls on the right to see how distance, focal length, aperture and sensor size affect your depth of field. The visualization and values update in real time.
         </p>
       </div>
       <button
         type="button"
         onClick={onOpen}
-        className="inline-flex h-[40px] shrink-0 items-center justify-center rounded-lg border border-[#CFE0F5] bg-white px-4 text-[12px] font-extrabold text-signal transition hover:border-signal/50 hover:bg-signal-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20"
+        className="col-span-2 inline-flex h-11 w-full shrink-0 items-center justify-center rounded-lg border border-[#CFE0F5] bg-white px-4 text-[12px] font-extrabold text-signal transition hover:border-signal/50 hover:bg-signal-soft focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 sm:col-span-1 sm:w-auto"
       >
         Learn more <span className="ml-2 text-[15px] leading-none">↗</span>
       </button>
@@ -337,13 +443,26 @@ function App() {
   const distanceMarks = useMemo(() => {
     if (distanceMax <= DEFAULT_DISTANCE_MAX_INCHES) {
       return system === "Imperial"
-        ? ["2'", "6'", "12'", "20'", "30'"]
-        : ["1m", "3m", "5m", "7m", "9m"];
+        ? [
+            { label: "2'", value: 24 },
+            { label: "6'", value: 72 },
+            { label: "12'", value: 144 },
+            { label: "20'", value: 240 },
+            { label: "30'", value: 360 },
+          ]
+        : [
+            { label: "1m", value: 100 / 2.54 },
+            { label: "3m", value: 300 / 2.54 },
+            { label: "5m", value: 500 / 2.54 },
+            { label: "7m", value: 700 / 2.54 },
+            { label: "9m", value: 900 / 2.54 },
+          ];
     }
 
-    return [0.2, 0.4, 0.6, 0.8, 1].map((fraction) =>
-      convert(distanceMax * fraction, 0)
-    );
+    return [0.2, 0.4, 0.6, 0.8, 1].map((fraction) => ({
+      label: convert(distanceMax * fraction, 0),
+      value: distanceMax * fraction,
+    }));
   }, [convert, distanceMax, system]);
 
   const metricCards: MetricCardProps[] = [
@@ -374,7 +493,7 @@ function App() {
     },
   ];
 
-  const activePreset = PRESETS.find(([_, focal, fStop, targetDistance, presetSensor]) =>
+  const activePreset = PRESETS.find(([, focal, fStop, targetDistance, presetSensor]) =>
     Math.abs(focalLength - focal) < 0.001 &&
     Math.abs(aperture - fStop) < 0.001 &&
     Math.abs(distance - targetDistance) < 0.001 &&
@@ -405,19 +524,19 @@ function App() {
 
   return (
     <main
-      className={dark ? "dark min-h-screen bg-canvas text-ink" : "min-h-screen bg-canvas text-ink"}
+      className={cn("min-h-screen bg-canvas text-ink", dark && "dark")}
       data-testid="app-shell"
     >
-      <div className="mx-auto w-full max-w-[1448px] px-5 pb-3 pt-6 md:px-8 xl:px-9 xl:pt-7">
-        <header className="mb-4 flex items-start justify-between border-b border-line pb-4">
+      <div className="mx-auto w-full max-w-[1448px] px-5 pb-1 pt-6 md:px-8 xl:px-9 xl:pt-7">
+        <header className="mb-5 flex items-start justify-between px-0 sm:px-3">
           <div>
             <p className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.20em] text-signal">
               Optical planning tool
             </p>
-            <h1 className="text-[34px] font-extrabold leading-[1.05] tracking-[-0.035em] text-ink lg:text-[36px]">
+            <h1 className="max-w-[760px] text-balance text-[32px] font-extrabold leading-[1.05] text-ink sm:text-[34px] lg:text-[36px]">
               Depth of Field Simulator
             </h1>
-            <p className="mt-2 text-[14px] leading-5 text-secondary">
+            <p className="mt-2 max-w-[720px] text-pretty text-[14px] leading-5 text-secondary">
               Visualize depth of field, focus range and how your camera settings affect sharpness.
             </p>
           </div>
@@ -433,22 +552,22 @@ function App() {
               aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
               title={dark ? "Switch to light mode" : "Switch to dark mode"}
               onClick={() => setDark(!dark)}
-              className="grid h-10 w-10 place-items-center rounded-md border border-line bg-surface text-[#334155] shadow-soft transition hover:border-signal/40 hover:text-signal focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20"
+              className="grid size-10 place-items-center rounded-md border border-line bg-surface text-[#334155] shadow-sm transition hover:border-signal/40 hover:text-signal focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20"
             >
-              <FontAwesomeIcon icon={dark ? faSun : faMoon} className="h-[18px] w-[18px]" />
+              <FontAwesomeIcon icon={dark ? faSun : faMoon} className="size-[18px]" />
             </button>
           </div>
         </header>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.72fr)_minmax(460px,0.98fr)]">
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.72fr)_minmax(460px,0.98fr)]">
           <section className="min-w-0">
             <div
               data-testid="simulator-card"
               className="rounded-lg border border-line bg-surface p-4 shadow-panel"
             >
               <div className="flex min-h-[34px] items-center justify-between">
-                <h2 className="flex items-center gap-3 text-[16px] font-extrabold text-ink">
-                  <FontAwesomeIcon icon={faCamera} className="h-[19px] w-[19px] text-signal" />
+                <h2 className="flex items-center gap-3 text-balance text-[16px] font-extrabold text-ink">
+                  <PanelTitleIcon icon={faCamera} />
                   Scene Visualization
                 </h2>
                 <span className="hidden items-center gap-2 text-[11px] italic text-muted sm:flex">
@@ -480,7 +599,7 @@ function App() {
                 />
               </div>
 
-              <div data-testid="metrics-grid" className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div data-testid="metrics-grid" className="mt-5 grid grid-cols-1 gap-3 min-[460px]:grid-cols-2 lg:grid-cols-4">
                 {metricCards.map((metric) => (
                   <MetricCard key={metric.label} {...metric} />
                 ))}
@@ -497,10 +616,10 @@ function App() {
             className="rounded-lg border border-line bg-surface p-4 shadow-panel"
           >
             <div className="mb-3 flex items-start gap-3">
-              <FontAwesomeIcon icon={faGear} className="mt-0.5 h-[22px] w-[22px] text-signal" />
+              <FontAwesomeIcon icon={faGear} className="mt-0.5 size-7 text-signal" />
               <div>
-                <h2 className="text-[17px] font-extrabold leading-5 text-ink">Camera &amp; Scene Settings</h2>
-                <p className="mt-1 text-[11.5px] leading-4 text-secondary">
+                <h2 className="text-balance text-[17px] font-extrabold leading-5 text-ink">Camera &amp; Scene Settings</h2>
+                <p className="mt-1 text-pretty text-[11.5px] leading-4 text-secondary">
                   Adjust the parameters below to see how they affect depth of field.
                 </p>
               </div>
@@ -555,7 +674,15 @@ function App() {
                 step={1}
                 update={setFocalLength}
                 icon={faMagnifyingGlass}
-                marks={["14mm", "28mm", "50mm", "85mm", "135mm", "200mm"]}
+                scale="focal"
+                marks={[
+                  { label: "14mm", value: 14 },
+                  { label: "28mm", value: 28 },
+                  { label: "50mm", value: 50 },
+                  { label: "85mm", value: 85 },
+                  { label: "135mm", value: 135 },
+                  { label: "200mm", value: 200 },
+                ]}
                 lesson="Longer lenses compress the scene and make the focused zone shallower at the same distance."
                 note={sensor !== "35mm (full frame)" ? `${equivalent} mm full-frame equivalent` : undefined}
               />
@@ -570,7 +697,15 @@ function App() {
                 step={0.1}
                 update={setAperture}
                 customIcon={<ApertureIcon />}
-                marks={["f/0.8", "f/1.4", "f/2.8", "f/5.6", "f/11", "f/22"]}
+                scale="log"
+                marks={[
+                  { label: "f/0.8", value: 0.8 },
+                  { label: "f/1.4", value: 1.4 },
+                  { label: "f/2.8", value: 2.8 },
+                  { label: "f/5.6", value: 5.6 },
+                  { label: "f/11", value: 11 },
+                  { label: "f/22", value: 22 },
+                ]}
                 lesson="A smaller f-number opens the aperture and isolates the subject; a larger f-number increases sharpness through the scene."
               />
             </div>
@@ -652,11 +787,12 @@ function App() {
                       type="button"
                       aria-pressed={active}
                       onClick={() => applyPreset(focal, fStop, targetDistance, presetSensor)}
-                      className={`h-[34px] rounded-md border px-2.5 text-[11px] font-extrabold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 ${
+                      className={cn(
+                        "h-9 rounded-md border px-3 text-[11px] font-extrabold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-signal/20 xl:h-[34px]",
                         active
                           ? "border-signal bg-signal-soft text-signal"
                           : "border-line bg-white text-ink hover:border-signal/40 hover:bg-signal-soft/50 hover:text-signal"
-                      }`}
+                      )}
                     >
                       {name}
                     </button>
